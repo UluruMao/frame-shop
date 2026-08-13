@@ -1,115 +1,79 @@
-# RESUME — Full-Stack Template + Frame Shop design
+# RESUME — Frame Shop build (Subagent-Driven Development)
 
-> Last updated 2026-08-12 (end of day). Working directory: `C:\Users\tcmao\Desktop\newRepo`
-> The template is DONE + verified. The application design (Frame Shop) is DONE + written. Next: review the spec, then write the implementation plan.
+> Last updated end of day 2026-08-13. Working directory: `C:\Users\tcmao\Desktop\newRepo`
+> Git: initialized, branch `frame-shop`, working tree CLEAN. Baseline: `b2bb879`.
+> **Implementing the Frame Shop plan via the SDD skill. Read this first tomorrow.**
 
----
+## WHERE WE ARE — exactly
 
-## WHERE WE ARE NOW (read this first)
+The Frame Shop V1 plan (`docs/superpowers/plans/2026-08-12-frame-shop.md`, 8 tasks) is being executed task-by-task with the subagent-driven-development skill: dispatch implementer → review → fix if needed → next task. **Half the backend is done and verified.**
 
-### ✅ Done — the template (`frame-backend` + `frame-frontend`)
-Both ends built, tested, and verified end-to-end on Windows:
-- Frontend: `npm run build` ✅, `npm test` ✅ (2/2). Runs on http://localhost:5173.
-- Backend: `mvn clean test` ✅ (context-loads). Live app serves login → JWT → protected CRUD against MariaDB with correct 401s. Runs on http://localhost:8081.
-- Environment: JDK 21, Maven 3.9.16, MariaDB 12.3, **Redis 5.0.14.1** — all installed + on user PATH. `JAVA_HOME` set. `frame_db` created with seed data. Full details in the env-facts table below.
+### ✅ Tasks 1-4 COMPLETE (each review-clean)
 
-### ✅ Done — the application design ("Frame Shop")
-A flash-sale storefront to be built ON TOP of the template, modeled on the Alibaba/Taobao seckill (秒杀) architecture. Design spec written + self-reviewed:
-**`docs/superpowers/specs/2026-08-12-frame-shop-flash-sale-design.md`**
-This is the previous Node/TS e-commerce demo rebuilt on the real stack, with the concurrency/queue/distributed pieces that were deferred now actually implemented.
+| Task | Commit(s) | Notes |
+|---|---|---|
+| 1: Data model + schema | `5e878f2` | User/Product/Order/OrderItem + enums + mappers + decrementStock. Clean. |
+| 2: Real auth + role=ADMIN | `ae42f95` | JWT role claim, SecurityUser.from reads role, hasRole rules, UserDetailsService, register. Clean (3 minor deferred). |
+| 3: Product CRUD + Redis cache + error codes | `f35fbd4` + `0afdffc` | + fix round 1: uploads permitAll + Redis-down DB fall-through. Clean (4 minor deferred). |
+| 4: Synchronous checkout + idempotency | `3742f2b` + `a67ae84` | + fix round 1: null-guard on selectByIdempotencyKey. Clean (3 minor deferred). |
 
-### ⏸ NEXT — implementation plan written; awaiting execution choice
-The design spec was reviewed (ultracode adversarial review, 22 findings, all fixed) and approved. **The implementation plan is written: `docs/superpowers/plans/2026-08-12-frame-shop.md`** (8 V1 tasks, bite-sized TDD steps, grounded in the actual template code). **Tomorrow's first action: choose execution mode (subagent-driven vs inline) and start Task 1 (data model + schema).** Linux deployment (§11a) is a separate follow-up plan after V1.
+**Test count: 9/9 passing** (`mvn clean test` on `frame-shop` branch at `a67ae84`).
 
----
+### ⏸ NEXT — Task 5 (Redis Lua gate + Stream + consumer)
 
-## Environment facts (permanently configured)
+**This is where tomorrow starts.** Task 5 is the hardest task — the Taobao-model heart: the Redis Lua stock gate + Stream buffer + consumer-group consumer (at-least-once via XACK-after-commit) + admin sale endpoint. It layers the async/Redis fast path onto Task 4's synchronous correctness core.
 
-| Thing | Value |
-|---|---|
-| Backend port | **8081** (8080 taken by `zBox_client.exe` — don't touch) |
-| Frontend port | 5173 (Vite dev) |
-| MariaDB root password | `frame_dev` |
-| DB name / table | `frame_db` / `demo_product` (2 seed rows) |
-| Demo login (template) | `admin` / `admin123` |
-| JDK path | `C:\Program Files\Java\jdk-21.0.11` |
-| Maven path | `D:\apache-maven-3.9.16\bin` |
-| MariaDB path | `C:\Program Files\MariaDB 12.3\bin` |
-| Redis path | `C:\Program Files\Redis` (service on :6379, verified PONG + Lua + Streams) |
+## TOMORROW, STEP BY STEP
 
-> **PATH note:** all on the *user* PATH in the registry. A **fresh terminal from the Start menu** resolves them. A terminal opened as a child of an already-open one inherits stale env — open a new terminal or sign out/in.
-
-## How to start tomorrow
-
-1. Open a **fresh** terminal (Start menu → Git Bash) so the PATH changes apply.
-2. Verify the toolchain:
+1. **Open a fresh terminal from the Start menu** (so PATH changes from earlier apply). Verify the toolchain:
    ```bash
    java -version && mvn -version && mariadb --version && redis-cli ping
    ```
-3. **First task of the day:** ask the user to review the design spec at
-   `docs/superpowers/specs/2026-08-12-frame-shop-flash-sale-design.md`.
-   On approval → invoke the `writing-plans` skill to turn the spec (esp. §12 build order) into a detailed implementation plan. Then begin build step 1 (data model + schema).
-4. (Reference) To run the template end-to-end now:
+   (If `mariadb`/`redis-cli`/`mvn`/`java` aren't found, the PATH isn't sticky — prepend the bin dirs: `export PATH="/c/Program Files/Java/jdk-21.0.11/bin:/d/apache-maven-3.9.16/bin:/c/Program Files/MariaDB 12.3/bin:/c/Program Files/Redis:$PATH"; export JAVA_HOME="/c/Program Files/Java/jdk-21.0.11"`)
+2. **Verify MariaDB + Redis are running** (services should auto-start, but check):
    ```bash
-   # Terminal 1 — backend
-   cd "C:/Users/tcmao/Desktop/newRepo/frame-backend" && mvn spring-boot:run   # :8081
-   # Terminal 2 — frontend
-   cd "C:/Users/tcmao/Desktop/newRepo/frame-frontend" && npm run dev          # :5173
+   netstat -ano | grep LISTEN | grep -E ":3306|:6379"   # both should show LISTENING
    ```
+3. **Resume the SDD execution** — continue from Task 5. The SDD skill's workspace + ledger already exist:
+   - Ledger: `.superpowers/sdd/2026-08-12-frame-shop/progress.md` (read this — it's the recovery map; Tasks 1-4 marked complete, Task 5 marked "IN PROGRESS — NOT STARTED")
+   - The plan: `docs/superpowers/plans/2026-08-12-frame-shop.md`
+   - **Invoke `superpowers:subagent-driven-development`** (it's the skill in progress) — or just continue the dispatch/review/fix loop manually using its scripts.
+4. **Task 5 dispatch steps** (per the SDD process):
+   - `git rev-parse HEAD` → record BASE (should be `a67ae84`)
+   - Run the task-brief script: `bash "/c/Users/tcmao/.claude/plugins/cache/claude-plugins-official/superpowers/6.2.0/skills/subagent-driven-development/scripts/task-brief" "docs/superpowers/plans/2026-08-12-frame-shop.md" 5`
+   - Dispatch a general-purpose implementer subagent with the brief path + context (the brief's Task 5 is large: `stock_gate.lua`, `StockGateService`, `StreamConsumerService` with consumer group + XACK-after-commit + XAUTOCLAIM, `AdminSaleController`, refactor `CheckoutServiceImpl` to the async hot path). Give it the environment facts (Redis at :6379, the PATH-prepend line, Task 4's `CheckoutService.checkout` returns `status="pending"` which Task 5 changes to `"queued"`).
+   - On DONE: generate review package (`scripts/review-package ... BASE HEAD`), dispatch task reviewer.
+   - Fix loop if needed (≤5 rounds), then mark complete + ledger entry + next task.
+5. **Remaining after Task 5:** Task 6 (payment + status + cancel), Task 7 (integration + load/mutex tests), Task 8 (frontend), then the final whole-branch review. Then Linux deployment (separate follow-up plan).
 
----
+## KEY ANCHORS for Task 5 (from the plan + Task 4)
 
-## The Frame Shop design — at a glance (full detail in the spec)
+- **Task 4's `CheckoutService.checkout` returns `status="pending"` (synchronous V1).** Task 5 changes the hot path to: Lua gate → `XADD` to `orders:pending` stream → `order_status:{id}="queued"` → return `202 {orderId, status:"queued"}`. The durable-write logic (decrementStock + insert + idempotency) moves into `StreamConsumerService`.
+- **The idempotency-key UNIQUE constraint remains the no-double-order authority** (Task 4 established it).
+- **Consumer group is mandatory** (not bare `XREAD`) — `XGROUP CREATE` + `XREADGROUP` + `XACK`-only-after-`@Transactional`-commit + `XAUTOCLAIM`/`XPENDING` recovery. This is the at-least-once construction.
+- **Redis 5.0.14.1** is installed (no `XAUTOCLAIM` — it's 6.2+; use `XPENDING` + `XCLAIM`, or re-read this consumer's PEL via `XREADGROUP ... ID 0`). Note this to the implementer.
+- The Lua script is two-pass (check-all-then-decr-all) with `tonumber()`. The brief has the literal script.
 
-**What:** flash-sale storefront on the template. Limited-stock products, many concurrent buyers, overselling must be impossible.
+## ENVIRONMENT FACTS (permanently configured)
 
-**Concurrency model — Taobao seckill (defense in depth):**
-- Tier 1 edge (Nginx/Vite) → Tier 2 app+Redis (the gate) → Tier 3 MariaDB (backstop).
-- **Redis Lua script** = primary stock gate (atomic check-and-decrement, shields DB from burst). Verified working on Redis 5.0.14.1.
-- **Redis Stream** (`orders:pending`) = the async buffer (缓冲); consumer drains at controlled rate → DB.
-- **DB conditional UPDATE** (`WHERE stock >= qty`) = final reconciliation backstop (the commented `decrementStock` in `DemoProductMapper.xml` becomes real).
-- One-per-user key + client idempotency key (dedup, Taobao-style). Fail-closed on Redis outage.
+| Thing | Value |
+|---|---|
+| Git branch | `frame-shop` (baseline `b2bb879` on `main`) |
+| Backend port | 8081 |
+| Frontend port | 5173 |
+| MariaDB | root pw `frame_dev`, db `frame_db` (4 tables: user/product/orders/order_item) |
+| Redis | :6379 (Windows service), Lua + Streams + consumer groups verified |
+| JDK / Maven / MariaDB / Redis | all on user PATH (fresh terminal from Start menu) |
+| SDD workspace | `.superpowers/sdd/2026-08-12-frame-shop/` (ledger + briefs + reports + review diffs; git-ignored) |
 
-**Data model:** user (NEW — real JWT auth, replaces old shared-secret), product (from DemoProduct + is_flash_sale/flash_sale_at), orders (status enum PENDING/PAID/SHIPPED/CANCELLED), order_item (name/price snapshots). Money = integer cents everywhere. Cart stays client-side (ported from old project).
-
-**Pom change still needed:** add `spring-boot-starter-data-redis` to `frame-backend/pom.xml` (the commented `spring.data.redis.*` in `application.yml` becomes active). Redisson NOT needed.
-
-**Build order** (spec §12, 9 steps):
-1. Data model + schema (user, product, orders, order_item) + seed
-2. Real auth (register/login backed by `user` table) — replaces stub
-3. Product CRUD + image upload (admin) + Redis-cached reads (**upload dir must be a config value, not a Windows path** — for Linux deploy)
-4. Cart (frontend, ported) + checkout endpoint with **synchronous** DB conditional-update gate first (get it correct)
-5. Add Redis Lua primary gate + Stream buffer + consumer (the Taobao model)
-6. Payment (atomic `pending→paid` flip) + order views
-7. Tests: unit → integration → **load/mutex test** (N concurrent checkouts for stock=5 → exactly 5 succeed, rest 409, final stock 0 — the artifact to show the mentor)
-8. Frontend: port pages, add login/register + flash-sale UI
-9. **Linux deployment** (mentor requirement, NOT optional): build jar + dist, provision Linux server, systemd + Nginx reverse proxy, verify end-to-end on Linux, run load/mutex test against deployed server; optional two instances behind Nginx to demo 分布式
-
-**Mentor topics mapped:** 前后端分离 (template) · 分布式部署 incl. Linux deploy (stateless JWT + shared Redis, deployed behind Nginx) · 高并发/缓冲 (Lua gate + Stream) · 并发与互斥 (Lua + DB conditional UPDATE) · 数据库长期保存 (MariaDB vs SQLite).
-
----
-
-## Non-obvious fixes applied during the template build (don't re-debug)
-
-1. **MyBatis-Plus `PaginationInnerInterceptor` missing** — in 3.5.17 it lives in a separate `mybatis-plus-jsqlparser` module; the SB4 starter doesn't pull it transitively. Added `com.baomidou:mybatis-plus-jsqlparser:3.5.17` to pom.xml.
-2. **`ObjectMapper` not a bean in test context** — `SecurityConfig` originally autowired `ObjectMapper` into the filter-chain method, breaking `@SpringBootTest` context load. Fixed by resolving it lazily from `ApplicationContext`.
-3. **MariaDB GSSAPI/Kerberos auth failure** — passwordless root made the JDBC driver try Windows SSPI; fixed by setting root password (`frame_dev`).
-4. **Backend port 8080** — taken by another app (`zBox_client.exe`); backend runs on **8081**, Vite proxy + all READMEs updated to match.
-
-## Key files
+## KEY FILES
 
 | File | Why |
 |---|---|
+| `docs/superpowers/plans/2026-08-12-frame-shop.md` | the 8-task implementation plan |
+| `.superpowers/sdd/2026-08-12-frame-shop/progress.md` | **the SDD ledger — read this first; recovery map** |
 | `docs/superpowers/specs/2026-08-12-frame-shop-flash-sale-design.md` | the design spec (revised after adversarial review) |
-| **`docs/superpowers/plans/2026-08-12-frame-shop.md`** | **the implementation plan — 8 V1 tasks, TDD, start here tomorrow** |
-| `RESUME.md` | this file |
-| `frame-backend/pom.xml` | backend deps (jsqlparser fix present; Redis starter still to add) |
-| `frame-backend/src/main/resources/application.yml` | DB creds, JWT secret, port 8081, commented Redis block |
-| `frame-backend/src/main/resources/schema.sql` | template DB + table + seed rows (flash-sale schema = build step 1) |
-| `frame-backend/.../security/SecurityConfig.java` | JWT filter chain, CORS, public paths |
-| `frame-backend/.../common/Result.java` | the response envelope every endpoint uses |
-| `frame-frontend/src/api/request.ts` | Axios instance: token attach, Result unwrap, 401→login |
-| `frame-frontend/src/store/useAuthStore.ts` | Zustand: token + user, persisted |
-| `frame-frontend/vite.config.ts` | `/api` → `:8081` proxy |
+| `frame-backend/.../service/impl/CheckoutServiceImpl.java` | Task 4's synchronous checkout — Task 5 refactors to async |
+| `frame-backend/.../security/SecurityConfig.java` | has role=ADMIN rules + uploads permitAll (Tasks 2-3) |
 
-`HANDOFF.md` and `prompt.txt` are the original template spec (source of truth for the scaffold). This `RESUME.md` is the current-state summary (template done + app designed).
+`RESUME.md` is this current-state summary. The SDD ledger is the authoritative recovery map if context is compacted — trust it + `git log` over recollection.
