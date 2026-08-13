@@ -58,6 +58,12 @@
             <version>${mybatis-plus.version}</version>
         </dependency>
 
+        <!-- Redis: stock gate, Stream buffer, rate limiter, read cache -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- Database: MariaDB driver (MySQL-compatible) -->
         <dependency>
             <groupId>org.mariadb.jdbc</groupId>

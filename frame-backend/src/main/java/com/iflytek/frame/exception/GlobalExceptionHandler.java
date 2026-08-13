@@ -28,7 +28,7 @@ import java.util.List;
  *
  * <p>Mapping:
  * <ul>
- *   <li>{@link BusinessException} → 400, business code + message</li>
+ *   <li>{@link BusinessException} → HTTP status derived from the business code (409/429/503/etc., default 400)</li>
  *   <li>Bean validation ({@code @Valid}) → 400, field-level details</li>
  *   <li>Auth / access → 401 / 403</li>
  *   <li>Not found → 404</li>
@@ -43,8 +43,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Result<Void>> handleBusiness(BusinessException ex, HttpServletRequest req) {
         log.warn("Business error on {}: [{}] {}", req.getRequestURI(), ex.getCode(), ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Result.fail(ex.getCode(), ex.getMessage()));
+        HttpStatus status = httpStatusFor(ex.getCode());
+        return ResponseEntity.status(status).body(Result.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    private HttpStatus httpStatusFor(int code) {
+        if (code == 401) return HttpStatus.UNAUTHORIZED;
+        if (code == 403) return HttpStatus.FORBIDDEN;
+        if (code == 404) return HttpStatus.NOT_FOUND;
+        if (code == 409) return HttpStatus.CONFLICT;
+        if (code == 429) return HttpStatus.TOO_MANY_REQUESTS;
+        if (code == 503) return HttpStatus.SERVICE_UNAVAILABLE;
+        return HttpStatus.BAD_REQUEST; // default for business codes 1000-1005
     }
 
     // --- validation: @Valid on @RequestBody ---

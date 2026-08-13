@@ -9,4 +9,8 @@
         where id = #{id} and stock &gt;= #{qty}
     </update>
 
+    <update id="updateImageUrl">
+        update product set image_url = #{imageUrl}, update_time = now() where id = #{id}
+    </update>
+
 </mapper>

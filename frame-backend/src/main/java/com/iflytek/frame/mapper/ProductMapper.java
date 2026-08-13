@@ -13,4 +13,6 @@ public interface ProductMapper extends BaseMapper<Product> {
      * Returns rows affected (0 if stock &lt; qty → caller treats as failure).
      */
     int decrementStock(@Param("id") Long id, @Param("qty") int qty);
+
+    void updateImageUrl(@Param("id") Long id, @Param("imageUrl") String imageUrl);
 }
