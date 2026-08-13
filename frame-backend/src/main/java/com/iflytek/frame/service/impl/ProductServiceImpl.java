@@ -14,6 +14,8 @@ import com.iflytek.frame.service.ProductService;
 import com.iflytek.frame.util.PageQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,8 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
 
+    private static final Logger log = LoggerFactory.getLogger(ProductServiceImpl.class);
+
     private final ProductMapper mapper;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -42,7 +46,12 @@ public class ProductServiceImpl implements ProductService {
     @SneakyThrows
     public Product getById(Long id) {
         String key = "product:" + id;
-        String cached = redis.opsForValue().get(key);
+        String cached = null;
+        try {
+            cached = redis.opsForValue().get(key);
+        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
+            log.warn("Redis read failed for key {} — falling through to DB: {}", key, e.getMessage());
+        }
         if (cached != null) {
             return objectMapper.readValue(cached, Product.class);
         }
@@ -50,7 +59,11 @@ public class ProductServiceImpl implements ProductService {
         if (p == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "product not found: " + id);
         }
-        redis.opsForValue().set(key, objectMapper.writeValueAsString(p), CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+        try {
+            redis.opsForValue().set(key, objectMapper.writeValueAsString(p), CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
+            log.warn("Redis write failed for key {} — returning uncached result: {}", key, e.getMessage());
+        }
         return p;
     }
 

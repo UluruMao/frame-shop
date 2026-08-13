@@ -84,6 +84,9 @@ public class SecurityConfig {
                         // public product reads (browsing — no login)
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/products", "/products/{id}").permitAll()
+                        // public product images (uploaded static files — anonymous browsing)
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/uploads/**").permitAll()
                         // admin-only product mutations + sale management
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/products", "/products/{id}/image", "/admin/sales/{productId}")

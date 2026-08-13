@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -41,5 +42,18 @@ class ProductServiceImplTest {
         when(valueOps.get("product:1")).thenReturn("{\"id\":1,\"name\":\"Cached\"}");
         productService.getById(1L);
         verify(productMapper, never()).selectById(any());
+    }
+
+    @Test
+    void getById_redisDown_fallsThroughToDb_andReturnsProduct() {
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("product:1")).thenThrow(new RedisConnectionFailureException("connection refused"));
+        Product p = new Product(); p.setId(1L); p.setName("Widget");
+        when(productMapper.selectById(1L)).thenReturn(p);
+
+        Product result = productService.getById(1L);
+
+        assertThat(result.getName()).isEqualTo("Widget");
+        verify(productMapper).selectById(1L);
     }
 }
