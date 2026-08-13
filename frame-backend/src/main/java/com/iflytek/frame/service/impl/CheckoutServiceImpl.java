@@ -95,6 +95,15 @@ public class CheckoutServiceImpl implements CheckoutService {
                 productMapper.recreditStock(e.getKey(), e.getValue());
             }
             Order existing = orderMapper.selectByIdempotencyKey(request.getIdempotencyKey());
+            if (existing == null) {
+                // The row vanished between the insert-failure and the lookup (concurrent
+                // delete, DB blip). Don't NPE — re-throw as a CONFLICT so the @Transactional
+                // rollback undoes our decrements cleanly and the failure surfaces as a proper
+                // 409 rather than a 500-with-NPE. The recreditStock above is belt-and-suspenders
+                // under the rollback.
+                throw new BusinessException(ResultCode.CONFLICT,
+                        "duplicate idempotency key but existing order not found");
+            }
             return new CheckoutResponse(existing.getId(), "pending");
         }
         for (Map.Entry<Long, Integer> e : qtyByProduct.entrySet()) {

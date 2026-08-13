@@ -89,4 +89,22 @@ class CheckoutServiceImplTest {
         verify(productMapper, times(2)).decrementStock(1L, 2); // called twice, but second rolled back
         verify(productMapper).recreditStock(1L, 2);           // second call's decrement reversed
     }
+
+    @Test
+    void checkout_duplicateIdempotencyKey_existingOrderVanishes_throwsConflictNotNpe() {
+        Product p = new Product(); p.setId(1L); p.setPriceInCents(1999); p.setStock(5);
+        when(productMapper.selectById(1L)).thenReturn(p);
+        when(productMapper.decrementStock(1L, 2)).thenReturn(1);
+        // insert collides on the idempotency-key UNIQUE constraint, but the existing
+        // row is gone by the time we look it up (concurrent delete / DB blip).
+        when(orderMapper.insert(any(com.iflytek.frame.entity.Order.class)))
+                .thenThrow(new DuplicateKeyException("uk_idempotency_key"));
+        when(orderMapper.selectByIdempotencyKey("vanished-key")).thenReturn(null);
+
+        // must surface as a BusinessException (CONFLICT), NOT a NullPointerException
+        assertThatThrownBy(() -> checkoutService.checkout(req("vanished-key"), 7L))
+                .isInstanceOf(com.iflytek.frame.exception.BusinessException.class);
+        // the decrement we made before the insert must be reversed
+        verify(productMapper).recreditStock(1L, 2);
+    }
 }
