@@ -69,7 +69,6 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // public endpoints
                         .requestMatchers(
                                 "/auth/login",
                                 "/auth/register"
@@ -82,7 +81,18 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/webjars/**"
                         ).permitAll()
-                        // everything else requires a valid JWT
+                        // public product reads (browsing — no login)
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/products", "/products/{id}").permitAll()
+                        // admin-only product mutations + sale management
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/products", "/products/{id}/image", "/admin/sales/{productId}")
+                                .hasRole("ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT,
+                                "/products/{id}").hasRole("ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.DELETE,
+                                "/products/{id}").hasRole("ADMIN")
+                        // everything else requires authentication
                         .anyRequest().authenticated())
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint((req, resp, ex) ->

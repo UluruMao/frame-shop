@@ -47,11 +47,12 @@ public class JwtUtil {
     }
 
     /** Build a signed JWT for the given user. */
-    public String generateToken(Long userId, String username) {
-        Map<String, Object> claims = new HashMap<>();
+    public String generateToken(Long userId, String username, com.iflytek.frame.common.Role role) {
+        java.util.Map<String, Object> claims = new java.util.HashMap<>();
         claims.put("username", username);
-        Date now = new Date();
-        Date expiry = new Date(now.getTime() + props.getExpire() * 1000L);
+        claims.put("role", role.name());
+        java.util.Date now = new java.util.Date();
+        java.util.Date expiry = new java.util.Date(now.getTime() + props.getExpire() * 1000L);
         return Jwts.builder()
                 .claims(claims)
                 .subject(String.valueOf(userId))

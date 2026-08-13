@@ -20,6 +20,7 @@ public enum ResultCode {
     NOT_FOUND(404, "resource not found"),
     METHOD_NOT_ALLOWED(405, "method not allowed"),
     UNPROCESSABLE_ENTITY(422, "unprocessable entity"),
+    CONFLICT(409, "conflict"),
 
     // --- 5xx: server errors ---
     INTERNAL_ERROR(500, "internal server error"),
