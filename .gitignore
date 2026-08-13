@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# TypeScript project-reference build artifacts
+*.tsbuildinfo
+frame-frontend/vite.config.d.ts
+frame-frontend/vite.config.js
+frame-frontend/vitest.config.d.ts
+frame-frontend/vitest.config.js
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Test coverage
+coverage/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# ===== Backend (Maven / Java) =====
+frame-backend/target/
+*.class
+*.jar
+*.war
+*.iml
+.mvn/
+mvnw
+mvnw.cmd
+
+# ===== Top-level =====
+*.png
+.superpowers/

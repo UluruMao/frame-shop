@@ -1,0 +1,45 @@
+Create a complete ready-to-develop full-stack template project following the exact backend and frontend tech stack listed below, separate backend and frontend modules clearly, generate all core base configurations, project skeleton, dependency setup, and basic demo code for immediate subsequent development.
+
+### Backend (Spring Boot Server) Tech Stack Specs:
+1. Spring Boot: 4.1.0 (core framework)
+2. Java 21 (development language)
+3. MyBatis-Plus 3.5.17, use starter: mybatis-plus-spring-boot4-starter (ORM database operation)
+4. MariaDB as relational database
+5. JWT for authentication & token login logic base
+6. SpringDoc OpenAPI (Swagger UI) for auto API documentation
+
+Required backend template deliverables:
+- Standard Spring Boot multi-layer project structure (controller/service/mapper/entity/dto/util/config)
+- application.yml config template for MariaDB, MyBatis-Plus, JWT, SpringDoc
+- Base entity class, global exception handler, unified API response wrapper
+- JWT filter & security interceptor base config
+- Sample CRUD demo interface + OpenAPI annotation example
+- pom.xml with all matching dependency versions
+
+### Frontend Module Name: frame-frontend, Tech Stack Specs:
+1. React 18 + TypeScript 5.5
+2. Vite 5.0 build tool
+3. Tailwind CSS 3.4 for styling
+4. lucide-react for icon library
+5. recharts for data chart components
+6. React Router v6 for page routing
+7. Zustand for global state management
+8. Axios for HTTP request encapsulation
+9. Vitest + React Testing Library for unit test base setup
+
+Required frontend template deliverables:
+- Vite+React+TS initialized project skeleton named frame-frontend
+- Pre-configured Tailwind CSS global setup
+- Axios request interceptor (token attach, error handling)
+- Zustand global store base template
+- React Router route layout & basic page routing example
+- Demo page with lucide icon + recharts sample chart
+- Vitest base test config + simple component test case
+- Complete package.json with all required dependency versions
+
+### General Requirements for the Template:
+1. Separate backend and frontend into independent folders, clear directory naming conventions
+2. All dependency versions strictly match the versions given in the tech table
+3. Include working demo code for both ends to verify database connection, API request, login token flow, page routing and chart rendering
+4. Add README.md for both backend and frontend with setup, run, build instructions
+5. After generating the full template skeleton, explain the project structure briefly, so I can directly carry out business feature development on this template without reconfiguring basic environment.
