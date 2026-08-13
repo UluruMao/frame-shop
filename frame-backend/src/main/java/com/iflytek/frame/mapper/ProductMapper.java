@@ -14,5 +14,12 @@ public interface ProductMapper extends BaseMapper<Product> {
      */
     int decrementStock(@Param("id") Long id, @Param("qty") int qty);
 
+    /**
+     * Reverse a prior {@link #decrementStock} — compensating action used when a
+     * checkout must roll back stock it already claimed (sold-out on a later item,
+     * or a duplicate idempotency-key insert). Not a gate: always succeeds.
+     */
+    int recreditStock(@Param("id") Long id, @Param("qty") int qty);
+
     void updateImageUrl(@Param("id") Long id, @Param("imageUrl") String imageUrl);
 }

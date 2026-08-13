@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.iflytek.frame.mapper.OrderMapper">
+
+    <select id="selectByIdempotencyKey" resultType="com.iflytek.frame.entity.Order">
+        select * from orders where idempotency_key = #{key} limit 1
+    </select>
+
+    <update id="updateStatusIf">
+        update orders
+        set status = #{to}, update_time = now()
+        where id = #{id} and status = #{from}
+    </update>
+
+</mapper>
