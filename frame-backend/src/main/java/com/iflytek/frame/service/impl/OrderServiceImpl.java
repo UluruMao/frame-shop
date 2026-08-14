@@ -32,14 +32,30 @@ public class OrderServiceImpl implements OrderService {
      * NOT the DB PK — the consumer lets the DB auto-generate the PK. After durable-write, the
      * consumer publishes {@code order_id_map:{correlationId} = <dbPk>} to Redis. This method:
      * <ol>
-     *   <li>Tries {@code selectById(id)} first — handles the case a client passes a real PK.</li>
+     *   <li>If {@code order_status:{id} = "queued"} in Redis (consumer hasn't persisted yet),
+     *       returns a synthetic Order with {@code status=PENDING} so the frontend can poll.</li>
+     *   <li>Otherwise tries {@code selectById(id)} first — handles a client passing a real PK.</li>
      *   <li>If null, looks up {@code order_id_map:{id}} → the real PK → {@code selectById(realPk)}.</li>
-     *   <li>If both miss, throws NOT_FOUND.</li>
+     *   <li>If all miss, throws NOT_FOUND.</li>
      * </ol>
      * The ownership check ({@code userId} matches) runs on the resolved row.
      */
     @Override
     public Order getById(Long id, Long userId) {
+        // Queued case: the checkout hot path returned a correlation id (millis) and
+        // set order_status:{id} = "queued" in Redis. The consumer hasn't persisted the
+        // Order row yet, so neither selectById(id) nor order_id_map:{id} will resolve.
+        // Return a synthetic Order so the frontend can poll for "pending"/"failed".
+        String statusKey = "order_status:" + id;
+        String cachedStatus = redis.opsForValue().get(statusKey);
+        if ("queued".equals(cachedStatus)) {
+            Order queued = new Order();
+            queued.setId(id);
+            queued.setStatus(OrderStatus.PENDING); // placeholder; frontend polls for pending/failed
+            queued.setUserId(userId);
+            return queued;
+        }
+
         Long realPk = resolveOrderId(id);
         Order o = orderMapper.selectById(realPk);
         if (o == null || !o.getUserId().equals(userId)) {

@@ -4,6 +4,7 @@ import com.iflytek.frame.common.PageResult;
 import com.iflytek.frame.common.Result;
 import com.iflytek.frame.entity.Order;
 import com.iflytek.frame.service.OrderService;
+import com.iflytek.frame.service.PaymentService;
 import com.iflytek.frame.util.PageQuery;
 import com.iflytek.frame.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class OrderController {
     private final OrderService orderService;
+    private final PaymentService paymentService;
 
     @Operation(summary = "Get my order by id")
     @GetMapping("/{id}")
@@ -37,5 +39,11 @@ public class OrderController {
     public Result<Void> cancel(@PathVariable Long id) {
         orderService.cancel(id, SecurityUtils.currentUserId());
         return Result.success();
+    }
+
+    @Operation(summary = "Pay a pending order (mock payment)")
+    @PostMapping("/{id}/pay")
+    public Result<Order> pay(@PathVariable Long id) {
+        return Result.success(paymentService.pay(id, SecurityUtils.currentUserId()));
     }
 }

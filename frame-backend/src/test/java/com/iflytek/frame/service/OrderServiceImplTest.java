@@ -1,6 +1,7 @@
 package com.iflytek.frame.service;
 
 import com.iflytek.frame.entity.Order;
+import com.iflytek.frame.common.OrderStatus;
 import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.mapper.OrderMapper;
 import com.iflytek.frame.service.impl.OrderServiceImpl;
@@ -56,6 +57,8 @@ class OrderServiceImplTest {
         when(orderMapper.selectById(corrId)).thenReturn(null);
         // Redis map: order_id_map:{corrId} = "42"
         when(redis.opsForValue()).thenReturn(valueOps);
+        // getById checks order_status:{id} for the queued case first; not "queued" here
+        when(valueOps.get("order_status:" + corrId)).thenReturn(null);
         when(valueOps.get("order_id_map:" + corrId)).thenReturn(String.valueOf(realPk));
         // selectById(realPk) to validate + load the order
         Order order = new Order();
@@ -82,18 +85,21 @@ class OrderServiceImplTest {
     void getById_realPkPassedDirectly_fastPathsAndReturnsOrder() {
         long realPk = 42L;
 
-        // selectById(realPk) returns the order directly (fast path — no Redis lookup)
+        // selectById(realPk) returns the order directly (fast path)
         Order order = new Order();
         order.setId(realPk);
         order.setUserId(7L);
         when(orderMapper.selectById(realPk)).thenReturn(order);
+        // getById checks order_status:{id} for the queued case first; not "queued" here
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("order_status:" + realPk)).thenReturn(null);
 
         Order result = orderService.getById(realPk, 7L);
 
         assertThat(result).isNotNull();
         assertThat(result.getId()).isEqualTo(realPk);
-        // Redis must NOT be consulted on the fast path
-        verify(redis, never()).opsForValue();
+        // The order_id_map is NOT consulted on the fast path (only order_status was)
+        verify(valueOps, never()).get("order_id_map:" + realPk);
     }
 
     @Test
@@ -102,6 +108,8 @@ class OrderServiceImplTest {
 
         when(orderMapper.selectById(corrId)).thenReturn(null); // not a real PK
         when(redis.opsForValue()).thenReturn(valueOps);
+        // getById checks order_status:{id} for the queued case first; not "queued" here
+        when(valueOps.get("order_status:" + corrId)).thenReturn(null);
         when(valueOps.get("order_id_map:" + corrId)).thenReturn(null); // not in map either
 
         assertThatThrownBy(() -> orderService.getById(corrId, 7L))
@@ -116,6 +124,8 @@ class OrderServiceImplTest {
 
         when(orderMapper.selectById(corrId)).thenReturn(null);
         when(redis.opsForValue()).thenReturn(valueOps);
+        // getById checks order_status:{id} for the queued case first; not "queued" here
+        when(valueOps.get("order_status:" + corrId)).thenReturn(null);
         when(valueOps.get("order_id_map:" + corrId)).thenReturn(String.valueOf(realPk));
         // order belongs to user 99, not 7
         Order order = new Order();
@@ -126,5 +136,25 @@ class OrderServiceImplTest {
         assertThatThrownBy(() -> orderService.getById(corrId, 7L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("order not found");
+    }
+
+    @Test
+    void getById_queuedInRedis_returnsSyntheticOrderForPolling() {
+        long corrId = 1690000000000L; // what the client holds (from the 202 response)
+
+        // order_status:{corrId} = "queued" — consumer hasn't persisted the row yet
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("order_status:" + corrId)).thenReturn("queued");
+
+        Order result = orderService.getById(corrId, 7L);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(corrId);
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.PENDING); // placeholder
+        assertThat(result.getUserId()).isEqualTo(7L);
+        // The DB must NOT be hit — the order row doesn't exist yet
+        verify(orderMapper, never()).selectById(any());
+        // The order_id_map must NOT be consulted — queued means no PK mapping yet
+        verify(valueOps, never()).get("order_id_map:" + corrId);
     }
 }
