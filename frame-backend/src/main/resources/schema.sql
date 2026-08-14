@@ -69,7 +69,7 @@ CREATE TABLE `order_item` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `user` (`username`, `password_hash`, `role`) VALUES
-    ('admin', '$2a$10$placeholder_admin_hash_replace_in_task2', 'ADMIN');
+    ('admin', '$2a$10$7FzLk9ItV8zh8fPkg9WJKuTOy.cxJ61NXxGVmYaSAGg9RlBxYYfKC', 'ADMIN');
 
 INSERT INTO `product` (`name`, `price_in_cents`, `stock`, `category`, `is_flash_sale`, `description`) VALUES
     ('Flash Widget', 1999, 5, 'widgets', 1, 'Limited flash-sale item'),

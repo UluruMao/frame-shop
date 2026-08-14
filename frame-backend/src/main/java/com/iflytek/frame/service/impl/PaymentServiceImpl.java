@@ -20,6 +20,10 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public Order pay(Long orderId, Long userId) {
+        // Authorize FIRST: getById resolves the correlation-id→PK via the order_id_map and
+        // checks ownership (throws NOT_FOUND if the order isn't owned by this user). Mutating
+        // before this check would let user A flip user B's PENDING order to PAID.
+        orderService.getById(orderId, userId);
         // mock payment always succeeds (mentor's instruction); the atomic flip is the guard
         orderService.flipStatus(orderId, OrderStatus.PENDING, OrderStatus.PAID);
         return orderService.getById(orderId, userId);

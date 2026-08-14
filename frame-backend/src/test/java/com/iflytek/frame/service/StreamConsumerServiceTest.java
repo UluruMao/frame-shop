@@ -20,11 +20,13 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -111,6 +113,10 @@ class StreamConsumerServiceTest {
                 .thenThrow(new DataIntegrityViolationException("some other constraint"));
         // selectByIdempotencyKey returns null → NOT an idempotency dup → re-credit + rethrow
         when(orderMapper.selectByIdempotencyKey("idem-1")).thenReturn(null);
+        when(redis.opsForValue()).thenReturn(valueOps);
+        // SET NX guard returns true → first delivery → recredit runs
+        when(valueOps.setIfAbsent(eq("recredited:1-0"), eq("1"), eq(3600L), any(TimeUnit.class)))
+                .thenReturn(true);
 
         assertThatThrownBy(() -> service.process(rec))
                 .isInstanceOf(DataIntegrityViolationException.class);

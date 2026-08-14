@@ -46,6 +46,8 @@ class PaymentServiceImplTest {
         assertThat(result).isNotNull();
         assertThat(result.getId()).isEqualTo(7L);
         assertThat(result.getStatus()).isEqualTo(OrderStatus.PAID);
-        verify(orderService).getById(7L, 99L);
+        // getById is called twice: once to authorize (ownership check) and once to return
+        // the freshly-flipped order.
+        verify(orderService, times(2)).getById(7L, 99L);
     }
 }

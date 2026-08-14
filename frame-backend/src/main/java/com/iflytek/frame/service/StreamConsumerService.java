@@ -290,10 +290,18 @@ public class StreamConsumerService {
                 // NOT an idempotency-key dup — some other integrity violation. Re-credit the
                 // Redis stock the hot path decremented, then rethrow (transaction rolls back,
                 // afterCommit XACK does NOT fire, message stays in PEL for retry).
-                for (JsonNode item : itemsNode) {
-                    Long pid = item.get("productId").asLong();
-                    int qty = item.get("quantity").asInt();
-                    stockGateService.recredit(pid, qty);
+                // Guard the recredit with SET NX so it fires only once per message id: on a
+                // persistent integrity failure the PEL re-read would re-credit again on every
+                // redelivery, inflating Redis stock. The 1h TTL lets a genuine later retry
+                // (after the failure is fixed) recredit once more.
+                Boolean recredited = redis.opsForValue().setIfAbsent(
+                        "recredited:" + rec.getId().getValue(), "1", 3600, TimeUnit.SECONDS);
+                if (Boolean.TRUE.equals(recredited)) {
+                    for (JsonNode item : itemsNode) {
+                        Long pid = item.get("productId").asLong();
+                        int qty = item.get("quantity").asInt();
+                        stockGateService.recredit(pid, qty);
+                    }
                 }
                 throw dup;
             }
