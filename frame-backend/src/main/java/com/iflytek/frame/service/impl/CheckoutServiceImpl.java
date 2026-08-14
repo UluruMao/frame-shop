@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
@@ -48,6 +49,18 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final ProductMapper productMapper;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * Unique-per-JVM correlation-id generator. Seeded from millis; each call increments.
+     * This MUST be unique per checkout call: the orderId is the XADD stream-entry field
+     * value AND the key suffix for {@code order_status:{orderId}} / {@code order_id_map:{orderId}}.
+     * If two checkouts share an orderId, (a) the Redis status/map keys collide (status aliasing),
+     * and (b) Spring Data Redis's stream deserialization confuses entries that share a field value,
+     * causing the consumer to read the wrong payload for a record (order loss). Unique per call
+     * eliminates both. The Order row's DB PK is separate (AUTO_INCREMENT) — this is only the
+     * correlation id the client polls.
+     */
+    private static final AtomicLong ORDER_SEQ = new AtomicLong(System.currentTimeMillis() * 1000);
 
     @Override
     public CheckoutResponse checkout(CheckoutRequest request, Long userId) {
@@ -79,11 +92,13 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
 
         // 5. XADD to orders:pending + set order_status = queued, return 202.
-        //    orderId is a millis-based CORRELATION ID for the order_status:{orderId} Redis
-        //    key — NOT the Order row's DB PK. The consumer lets the DB AUTO_INCREMENT
-        //    generate the real PK (avoids same-millisecond PK collisions). The CheckoutResponse
+        //    orderId is a UNIQUE-per-call CORRELATION ID (AtomicLong, seeded from millis) for the
+        //    order_status:{orderId} Redis key — NOT the Order row's DB PK. The consumer lets the
+        //    DB AUTO_INCREMENT generate the real PK. Uniqueness is critical: a shared orderId field
+        //    value across stream entries triggers Spring Data Redis deserialization confusion (the
+        //    consumer reads the wrong payload for a record → order loss). The CheckoutResponse
         //    returns this correlation id so the client can poll order_status:{id}.
-        Long orderId = System.currentTimeMillis();
+        Long orderId = ORDER_SEQ.incrementAndGet();
         String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct);
         redis.opsForStream().add("orders:pending", Map.of(
                 "orderId", String.valueOf(orderId),
