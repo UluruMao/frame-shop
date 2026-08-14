@@ -1,121 +1,123 @@
 package com.iflytek.frame.service.impl;
 
-import com.iflytek.frame.common.OrderStatus;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.CheckoutRequest;
 import com.iflytek.frame.dto.CheckoutResponse;
 import com.iflytek.frame.dto.OrderItemDTO;
-import com.iflytek.frame.entity.Order;
-import com.iflytek.frame.entity.OrderItem;
 import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.exception.BusinessException;
-import com.iflytek.frame.mapper.OrderItemMapper;
-import com.iflytek.frame.mapper.OrderMapper;
 import com.iflytek.frame.mapper.ProductMapper;
 import com.iflytek.frame.service.CheckoutService;
+import com.iflytek.frame.service.StockGateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
+/**
+ * Async hot-path checkout (Taobao seckill model).
+ *
+ * <p>The request never touches the DB for writes — it:
+ * <ol>
+ *   <li>Aggregates item quantities per product.</li>
+ *   <li>Fetches products server-side for price authority ({@code selectBatchIds}).</li>
+ *   <li>Redis Lua gate ({@code stockGateService.tryClaimStock}) — atomic all-or-nothing
+ *       decrement across all items; FAIL → 409 "sold out".</li>
+ *   <li>Computes the total from DB prices.</li>
+ *   <li>{@code XADD}s an order message to {@code orders:pending} for the consumer to
+ *       durably persist, sets {@code order_status:{id} = "queued"}, returns 202.</li>
+ * </ol>
+ *
+ * <p>The durable write (Order + OrderItem inserts, idempotency, DB-backstop decrement)
+ * moves to {@link StreamConsumerService#process} — the at-least-once consumer.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class CheckoutServiceImpl implements CheckoutService {
 
+    private final StringRedisTemplate redis;
+    private final StockGateService stockGateService;
     private final ProductMapper productMapper;
-    private final OrderMapper orderMapper;
-    private final OrderItemMapper orderItemMapper;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    @Transactional
     public CheckoutResponse checkout(CheckoutRequest request, Long userId) {
         // 1. Aggregate quantities per product (dedup within the cart).
-        //    LinkedHashMap preserves first-seen order so the rollback walk below
-        //    can stop at the failing product deterministically.
         Map<Long, Integer> qtyByProduct = new LinkedHashMap<>();
         for (OrderItemDTO item : request.getItems()) {
             qtyByProduct.merge(item.getProductId(), item.getQuantity(), Integer::sum);
         }
 
         // 2. Fetch products (server-side price authority — never trust the client).
-        Map<Long, Product> byId = new HashMap<>();
-        for (Long pid : qtyByProduct.keySet()) {
-            Product p = productMapper.selectById(pid);
-            if (p == null) {
-                throw new BusinessException(ResultCode.NOT_FOUND, "one or more products not found");
-            }
-            byId.put(pid, p);
+        List<Product> products = productMapper.selectBatchIds(qtyByProduct.keySet());
+        if (products.size() != qtyByProduct.size()) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "one or more products not found");
         }
 
-        // 3. Synchronous DB conditional-update gate (the correctness core;
-        //    Redis gate is added in Task 5 as an optimization on this correct base).
-        //    Claim stock for each product; on a 0-rows failure reverse every claim
-        //    already made in this invocation (the items decremented before this one).
-        for (Map.Entry<Long, Integer> e : qtyByProduct.entrySet()) {
-            int rows = productMapper.decrementStock(e.getKey(), e.getValue());
-            if (rows == 0) {
-                for (Map.Entry<Long, Integer> prev : qtyByProduct.entrySet()) {
-                    if (prev.getKey().equals(e.getKey())) break;
-                    productMapper.recreditStock(prev.getKey(), prev.getValue());
-                }
-                throw new BusinessException(ResultCode.CONFLICT, "sold out");
-            }
+        // 3. Redis Lua gate (atomic, all-or-nothing — no partial decrements on FAIL).
+        List<Long> ids = new ArrayList<>(qtyByProduct.keySet());
+        List<Integer> qtys = ids.stream().map(qtyByProduct::get).collect(Collectors.toList());
+        boolean claimed = stockGateService.tryClaimStock(ids, qtys);
+        if (!claimed) {
+            throw new BusinessException(ResultCode.CONFLICT, "sold out");
         }
 
-        // 4. Compute total from DB prices (price authority — client never sends price).
+        // 4. Compute total from DB prices.
         int totalInCents = 0;
+        Map<Long, Product> byId = products.stream().collect(Collectors.toMap(Product::getId, p -> p));
         for (Map.Entry<Long, Integer> e : qtyByProduct.entrySet()) {
             totalInCents += byId.get(e.getKey()).getPriceInCents() * e.getValue();
         }
 
-        // 5. Insert the order (status=PENDING) guarded by the idempotency_key UNIQUE
-        //    constraint, then the line items. Claim stock FIRST, persist only if the
-        //    claim succeeded; on a duplicate insert reverse our decrement and return
-        //    the existing order (no double order, no double decrement).
-        Order order = new Order();
-        order.setUserId(userId);
-        order.setCustomerName(request.getCustomerName());
-        order.setCustomerEmail(request.getCustomerEmail());
-        order.setShippingAddress(request.getShippingAddress());
-        order.setTotalInCents(totalInCents);
-        order.setStatus(OrderStatus.PENDING);
-        order.setIdempotencyKey(request.getIdempotencyKey());
+        // 5. XADD to orders:pending + set order_status = queued, return 202.
+        //    orderId is generated now (correlates the stream message to the queued-status key).
+        //    NOTE: System.currentTimeMillis() is simplistic and unsafe under concurrency
+        //    (collisions if two checkouts happen within the same millisecond). A Snowflake
+        //    or UUID is the production fix — noted in the task report.
+        Long orderId = System.currentTimeMillis();
+        String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct);
+        redis.opsForStream().add("orders:pending", Map.of(
+                "orderId", String.valueOf(orderId),
+                "userId", String.valueOf(userId),
+                "payload", payload));
+        redis.opsForValue().set("order_status:" + orderId, "queued");
+        return new CheckoutResponse(orderId, "queued");
+    }
+
+    /**
+     * Serialize the durable-write context as JSON for the consumer.
+     * Carries everything the consumer needs to insert the Order + OrderItems
+     * without re-fetching from the DB (except for the DB-backstop stock decrement).
+     */
+    private String jsonPayload(Long orderId, Long userId, CheckoutRequest req,
+                                int total, Map<Long, Integer> items) {
         try {
-            orderMapper.insert(order);
-        } catch (DuplicateKeyException dup) {
-            // A prior delivery already created this order — reverse our decrement
-            // and return the existing one.
-            for (Map.Entry<Long, Integer> e : qtyByProduct.entrySet()) {
-                productMapper.recreditStock(e.getKey(), e.getValue());
-            }
-            Order existing = orderMapper.selectByIdempotencyKey(request.getIdempotencyKey());
-            if (existing == null) {
-                // The row vanished between the insert-failure and the lookup (concurrent
-                // delete, DB blip). Don't NPE — re-throw as a CONFLICT so the @Transactional
-                // rollback undoes our decrements cleanly and the failure surfaces as a proper
-                // 409 rather than a 500-with-NPE. The recreditStock above is belt-and-suspenders
-                // under the rollback.
-                throw new BusinessException(ResultCode.CONFLICT,
-                        "duplicate idempotency key but existing order not found");
-            }
-            return new CheckoutResponse(existing.getId(), "pending");
+            var node = objectMapper.createObjectNode();
+            node.put("orderId", orderId);
+            node.put("userId", userId);
+            node.put("customerName", req.getCustomerName());
+            node.put("customerEmail", req.getCustomerEmail());
+            node.put("shippingAddress", req.getShippingAddress());
+            node.put("totalInCents", total);
+            node.put("idempotencyKey", req.getIdempotencyKey());
+            var itemsNode = node.putArray("items");
+            items.forEach((pid, qty) -> {
+                var i = itemsNode.addObject();
+                i.put("productId", pid);
+                i.put("quantity", qty);
+            });
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-        for (Map.Entry<Long, Integer> e : qtyByProduct.entrySet()) {
-            Product p = byId.get(e.getKey());
-            OrderItem oi = new OrderItem();
-            oi.setOrderId(order.getId());
-            oi.setProductId(p.getId());
-            oi.setName(p.getName());
-            oi.setPriceInCents(p.getPriceInCents());
-            oi.setQuantity(e.getValue());
-            orderItemMapper.insert(oi);
-        }
-        return new CheckoutResponse(order.getId(), "pending");
     }
 }
