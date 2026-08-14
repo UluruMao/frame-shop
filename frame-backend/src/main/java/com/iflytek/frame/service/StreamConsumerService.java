@@ -36,13 +36,27 @@ import java.util.concurrent.TimeUnit;
  * DB-backstop stock decrement, inserts line items, and XACKs <strong>only after the
  * transaction commits</strong>.
  *
+ * <h3>Order ID strategy</h3>
+ * The payload carries a {@code orderId} (millis-based correlation id) used ONLY for the
+ * {@code order_status:{orderId}} Redis key. The Order row's PK is DB AUTO_INCREMENT
+ * (NOT set from the payload) — this avoids same-millisecond PK collisions. OrderItem FK
+ * uses {@code order.getId()} (the DB-generated PK post-insert), NOT the payload's orderId.
+ *
  * <h3>At-least-once delivery</h3>
  * XACK is deferred to a {@link TransactionSynchronization#afterCommit()} hook registered
  * at the very start of {@link #process}. If the consumer crashes before the DB transaction
  * commits, no XACK happens, and the message remains in the consumer's Pending Entries
  * List (PEL) for redelivery. On redelivery, the idempotency-key UNIQUE constraint causes
- * the Order insert to throw {@link DataIntegrityViolationException}, which the consumer
- * treats as "already processed" → ack-and-skip (no double order, no double decrement).
+ * the Order insert to throw {@link DataIntegrityViolationException}; the consumer calls
+ * {@code selectByIdempotencyKey} to confirm it's a genuine idempotency dup → ack-and-skip
+ * (no double order, no double decrement). If the lookup returns null, the violation was
+ * something else → re-credit Redis + rethrow (message stays in PEL).
+ *
+ * <h3>Poison-message escape</h3>
+ * A malformed/missing-field payload would NPE or fail to parse, livelocking the PEL
+ * (XREADGROUP "0" re-delivers every 500ms). The JSON-parsing phase catches parse/NPE
+ * failures, XACKs the message terminal (it's unprocessable), sets status to "failed",
+ * and returns without entering the @Transactional DB-write path.
  *
  * <h3>Self-invocation note</h3>
  * {@link #drain} calls {@link #process} via a {@code @Lazy} self-injected reference so the
@@ -158,10 +172,20 @@ public class StreamConsumerService {
     /**
      * Durable-write a single order from the stream payload.
      *
+     * <p>Two phases:
+     * <ol>
+     *   <li><b>JSON parse</b> (poison-message escape): if the payload is malformed or a
+     *       field is missing, XACK the message terminal + set status to "failed" + return.
+     *       No DB writes, no transaction rollback — the message is unprocessable poison.</li>
+     *   <li><b>DB durable write</b> (inside @Transactional + afterCommit-XACK): insert
+     *       Order (idempotency-guarded, DB auto-gen PK) → DB-backstop decrement per item →
+     *       insert OrderItems (FK = order.getId()).</li>
+     * </ol>
+     *
      * <p>XACK is registered as an {@code afterCommit} hook at the very start so it fires
-     * on EVERY return path (DupKey skip, FAILED branch, success). This is the
-     * at-least-once guarantee: crash before commit → no ack → message stays in PEL →
-     * redelivered → idempotency-skip on the dup insert.
+     * on EVERY return path from the DB-write phase (DupKey skip, FAILED branch, success).
+     * This is the at-least-once guarantee: crash before commit → no ack → message stays
+     * in PEL → redelivered → idempotency-skip on the dup insert.
      *
      * <p><strong>Non-transactional Redis writes inside @Transactional:</strong> the Redis
      * writes in the FAILED branch (recredit, DEL key, set status) and the one-per-user
@@ -190,18 +214,52 @@ public class StreamConsumerService {
                 });
 
         String payload = String.valueOf(rec.getValue().get("payload"));
+        Long payloadOrderId;
+        Long userId;
+        String idempotencyKey;
+        int totalInCents;
+        String customerName;
+        String customerEmail;
+        String shippingAddress;
+        JsonNode itemsNode;
+
+        // ---- JSON parse (poison-message escape) ----
+        // A malformed/missing-field message would NPE/parse-fail and livelock the PEL
+        // (XREADGROUP "0" re-delivers every 500ms). On a parse failure, XACK the message
+        // terminal (it's unprocessable — no point retrying), set status to "failed", and
+        // return WITHOUT throwing (no transaction rollback needed — no DB writes happened).
+        // This is the ONE terminal-early-acknowledge case that's correct: the message is
+        // poison, not a transient failure.
         try {
             JsonNode node = objectMapper.readTree(payload);
-            Long orderId = node.get("orderId").asLong();
-            Long userId = node.get("userId").asLong();
-            String idempotencyKey = node.get("idempotencyKey").asText();
-            int totalInCents = node.get("totalInCents").asInt();
-            String customerName = node.get("customerName").asText();
-            String customerEmail = node.get("customerEmail").asText();
-            String shippingAddress = node.get("shippingAddress").asText();
+            payloadOrderId = node.get("orderId").asLong();
+            userId = node.get("userId").asLong();
+            idempotencyKey = node.get("idempotencyKey").asText();
+            totalInCents = node.get("totalInCents").asInt();
+            customerName = node.get("customerName").asText();
+            customerEmail = node.get("customerEmail").asText();
+            shippingAddress = node.get("shippingAddress").asText();
+            itemsNode = node.get("items");
+        } catch (Exception parseEx) {
+            log.error("poison message {}: unparseable payload, XACKing terminal", rec.getId(), parseEx);
+            // Try to extract orderId for the status key; if even that fails, use the record id.
+            String statusKey = "order_status:" + rec.getId();
+            try {
+                statusKey = "order_status:" + objectMapper.readTree(payload).get("orderId").asLong();
+            } catch (Exception ignored) {
+                // payload is truly garbage — fall back to record id
+            }
+            redis.opsForValue().set(statusKey, "failed");
+            redis.opsForStream().acknowledge(STREAM, GROUP, rec.getId());
+            return;
+        }
 
+        // ---- DB durable write (inside @Transactional + afterCommit-XACK path) ----
+        try {
             Order order = new Order();
-            order.setId(orderId); // deterministic — matches the queued-status key
+            // Do NOT set the id — let the DB AUTO_INCREMENT generate it (avoids
+            // same-millisecond collisions on the PK; the payload's orderId is only a
+            // correlation id for the order_status:{payloadOrderId} Redis key).
             order.setUserId(userId);
             order.setCustomerName(customerName);
             order.setCustomerEmail(customerEmail);
@@ -213,19 +271,30 @@ public class StreamConsumerService {
             try {
                 orderMapper.insert(order);
             } catch (DataIntegrityViolationException dup) {
-                // Duplicate idempotency key — a prior delivery already created this order.
-                // Do NOT re-decrement stock (the Lua gate decremented in the hot path;
-                // the prior delivery's DB-backstop decrement already ran). Ack-and-skip.
-                // The afterCommit hook will XACK when the transaction commits.
-                redis.opsForValue().set("order_status:" + orderId, "pending");
-                return;
+                // Disambiguate: was this a genuine idempotency-key dup, or something else?
+                Order existing = orderMapper.selectByIdempotencyKey(idempotencyKey);
+                if (existing != null) {
+                    // Genuine idempotency dedup — a prior delivery already persisted + decremented.
+                    // Do NOT re-decrement stock. Ack-and-skip (afterCommit hook XACKs).
+                    redis.opsForValue().set("order_status:" + payloadOrderId, "pending");
+                    return;
+                }
+                // NOT an idempotency-key dup — some other integrity violation. Re-credit the
+                // Redis stock the hot path decremented, then rethrow (transaction rolls back,
+                // afterCommit XACK does NOT fire, message stays in PEL for retry).
+                for (JsonNode item : itemsNode) {
+                    Long pid = item.get("productId").asLong();
+                    int qty = item.get("quantity").asInt();
+                    stockGateService.recredit(pid, qty);
+                }
+                throw dup;
             }
 
             // DB-backstop: conditional decrement per item. Redis already decremented in
             // the hot path; this catches Redis/DB drift (e.g. Redis was reloaded from DB
             // mid-sale, or a failed prior delivery left Redis over-decremented). If
             // rows=0, the order is FAILED + Redis re-credited + one-per-user key deleted.
-            for (JsonNode item : node.get("items")) {
+            for (JsonNode item : itemsNode) {
                 Long pid = item.get("productId").asLong();
                 int qty = item.get("quantity").asInt();
                 int rows = productMapper.decrementStock(pid, qty);
@@ -236,12 +305,12 @@ public class StreamConsumerService {
                     orderMapper.updateById(order);
                     stockGateService.recredit(pid, qty);
                     redis.delete("seckill:" + pid + ":" + userId);
-                    redis.opsForValue().set("order_status:" + orderId, "failed");
+                    redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
                     return;
                 }
                 Product p = productMapper.selectById(pid);
                 OrderItem oi = new OrderItem();
-                oi.setOrderId(orderId);
+                oi.setOrderId(order.getId()); // ACTUAL DB-generated PK, not the payload's millis orderId
                 oi.setProductId(pid);
                 oi.setName(p.getName());
                 oi.setPriceInCents(p.getPriceInCents());
@@ -252,7 +321,10 @@ public class StreamConsumerService {
                 redis.opsForValue().set("seckill:" + pid + ":" + userId, "1",
                         3600, TimeUnit.SECONDS);
             }
-            redis.opsForValue().set("order_status:" + orderId, "pending");
+            redis.opsForValue().set("order_status:" + payloadOrderId, "pending");
+        } catch (DataIntegrityViolationException rethrow) {
+            // Already disambiguated above — re-throw to roll back the transaction.
+            throw rethrow;
         } catch (Exception e) {
             throw new RuntimeException(e); // rolls back the transaction; no XACK (afterCommit won't fire)
         }

@@ -1,6 +1,8 @@
 package com.iflytek.frame.service.impl;
 
+import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.entity.Product;
+import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.mapper.ProductMapper;
 import com.iflytek.frame.service.StockGateService;
 import jakarta.annotation.PostConstruct;
@@ -48,6 +50,9 @@ public class StockGateServiceImpl implements StockGateService {
     @Override
     public void loadStock(Long productId) {
         Product p = productMapper.selectById(productId);
+        if (p == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "product not found: " + productId);
+        }
         redis.opsForValue().set("stock:" + productId, String.valueOf(p.getStock()));
     }
 

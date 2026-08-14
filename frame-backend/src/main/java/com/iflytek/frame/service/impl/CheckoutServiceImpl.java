@@ -79,10 +79,10 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
 
         // 5. XADD to orders:pending + set order_status = queued, return 202.
-        //    orderId is generated now (correlates the stream message to the queued-status key).
-        //    NOTE: System.currentTimeMillis() is simplistic and unsafe under concurrency
-        //    (collisions if two checkouts happen within the same millisecond). A Snowflake
-        //    or UUID is the production fix — noted in the task report.
+        //    orderId is a millis-based CORRELATION ID for the order_status:{orderId} Redis
+        //    key — NOT the Order row's DB PK. The consumer lets the DB AUTO_INCREMENT
+        //    generate the real PK (avoids same-millisecond PK collisions). The CheckoutResponse
+        //    returns this correlation id so the client can poll order_status:{id}.
         Long orderId = System.currentTimeMillis();
         String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct);
         redis.opsForStream().add("orders:pending", Map.of(

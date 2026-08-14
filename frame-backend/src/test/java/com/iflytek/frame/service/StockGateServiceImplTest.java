@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 /**
@@ -68,5 +69,16 @@ class StockGateServiceImplTest {
         stockGateService.recredit(3L, 4);
 
         verify(valueOps).increment("stock:3", 4);
+    }
+
+    @Test
+    void loadStock_productNotFound_throwsNotFound_notNpe() {
+        when(productMapper.selectById(99L)).thenReturn(null); // product doesn't exist
+
+        assertThatThrownBy(() -> stockGateService.loadStock(99L))
+                .isInstanceOf(com.iflytek.frame.exception.BusinessException.class)
+                .hasMessageContaining("product not found: 99");
+        // must NOT touch Redis — no stock to load
+        verify(redis, never()).opsForValue();
     }
 }
