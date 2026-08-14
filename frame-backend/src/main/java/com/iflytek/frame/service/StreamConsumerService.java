@@ -37,10 +37,14 @@ import java.util.concurrent.TimeUnit;
  * transaction commits</strong>.
  *
  * <h3>Order ID strategy</h3>
- * The payload carries a {@code orderId} (millis-based correlation id) used ONLY for the
- * {@code order_status:{orderId}} Redis key. The Order row's PK is DB AUTO_INCREMENT
- * (NOT set from the payload) — this avoids same-millisecond PK collisions. OrderItem FK
- * uses {@code order.getId()} (the DB-generated PK post-insert), NOT the payload's orderId.
+ * The payload carries a {@code orderId} (millis-based correlation id) used for two Redis
+ * keys: {@code order_status:{orderId}} (visible status) and {@code order_id_map:{orderId}}
+ * (correlation-id→DB-PK map so the client can resolve its 202 correlation id to the real
+ * Order row). The Order row's PK is DB AUTO_INCREMENT (NOT set from the payload) — this
+ * avoids same-millisecond PK collisions. OrderItem FK uses {@code order.getId()} (the
+ * DB-generated PK post-insert), NOT the payload's orderId. The consumer writes the
+ * {@code order_id_map} on every branch that produces a persisted Order row: success,
+ * FAILED (row exists with FAILED status), and DupKey-skip (existing order's PK).
  *
  * <h3>At-least-once delivery</h3>
  * XACK is deferred to a {@link TransactionSynchronization#afterCommit()} hook registered
@@ -276,6 +280,10 @@ public class StreamConsumerService {
                 if (existing != null) {
                     // Genuine idempotency dedup — a prior delivery already persisted + decremented.
                     // Do NOT re-decrement stock. Ack-and-skip (afterCommit hook XACKs).
+                    // Map the correlation id → the existing order's DB PK so the client can
+                    // resolve the order it holds (the correlation id) to the real row.
+                    redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                            String.valueOf(existing.getId()));
                     redis.opsForValue().set("order_status:" + payloadOrderId, "pending");
                     return;
                 }
@@ -303,6 +311,10 @@ public class StreamConsumerService {
                     // delete the one-per-user key, and ack (afterCommit hook).
                     order.setStatus(OrderStatus.FAILED);
                     orderMapper.updateById(order);
+                    // Map the correlation id → the FAILED order's DB PK so the client can
+                    // resolve its correlation id to the real (FAILED) row.
+                    redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                            String.valueOf(order.getId()));
                     stockGateService.recredit(pid, qty);
                     redis.delete("seckill:" + pid + ":" + userId);
                     redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
@@ -321,6 +333,11 @@ public class StreamConsumerService {
                 redis.opsForValue().set("seckill:" + pid + ":" + userId, "1",
                         3600, TimeUnit.SECONDS);
             }
+            // success: order persisted + items inserted → publish the correlation-id→PK map
+            // so the client can resolve its 202 correlation id to the real Order row, and
+            // set the visible status to "pending" (consumer durable write is committed).
+            redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                    String.valueOf(order.getId()));
             redis.opsForValue().set("order_status:" + payloadOrderId, "pending");
         } catch (DataIntegrityViolationException rethrow) {
             // Already disambiguated above — re-throw to roll back the transaction.
