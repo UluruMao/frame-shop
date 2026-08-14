@@ -22,3 +22,15 @@ export function updateProduct(id: number, payload: Omit<Product, 'id'>): Promise
 export function deleteProduct(id: number): Promise<void> {
   return request.delete(`/products/${id}`)
 }
+
+/** POST /products/{id}/image — multipart upload; returns the image URL. Admin-only. */
+export function uploadImage(id: number, file: File): Promise<string> {
+  const form = new FormData()
+  form.append('file', file)
+  return request.post<string>(`/products/${id}/image`, form)
+}
+
+/** POST /admin/sales/{id} — load product stock into Redis to open a flash sale. Admin-only. */
+export function openFlashSale(id: number): Promise<void> {
+  return request.post(`/admin/sales/${id}`)
+}

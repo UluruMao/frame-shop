@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware'
 interface AuthUser {
   userId: number
   username: string
+  role: string
 }
 
 interface AuthState {
@@ -17,7 +18,8 @@ interface AuthState {
 /**
  * Global auth store (Zustand + persist to localStorage). The Axios request
  * interceptor reads `token` from here to attach the Bearer header; the response
- * interceptor calls `clear()` on 401.
+ * interceptor calls `clear()` on 401. The {@code role} ("USER"|"ADMIN") gates
+ * admin-only surfaces (the Admin page + product mutations).
  */
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -35,3 +37,8 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 )
+
+/** True iff the current user has the ADMIN role. */
+export function useIsAdmin(): boolean {
+  return useAuthStore((s) => s.user?.role === 'ADMIN')
+}

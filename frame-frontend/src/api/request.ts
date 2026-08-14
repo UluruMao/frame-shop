@@ -16,7 +16,7 @@ export interface ApiClient {
 /**
  * Pre-configured Axios instance.
  *
- * - base URL `/api` is proxied to the backend (:8080) by Vite in dev — see vite.config.ts.
+ * - base URL `/api` is proxied to the backend (:8081) by Vite in dev — see vite.config.ts.
  * - Request interceptor attaches `Authorization: Bearer <token>` from the auth store.
  * - Response interceptor unwraps the `Result.data` envelope and surfaces `message` on
  *   failure; on 401 it clears the token and redirects to /login.

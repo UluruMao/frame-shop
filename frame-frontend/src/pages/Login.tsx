@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { LogIn } from 'lucide-react'
 import { login } from '@/api/auth'
 import { useAuthStore } from '@/store/useAuthStore'
@@ -22,7 +22,7 @@ export default function Login() {
     setLoading(true)
     try {
       const res = await login({ username, password })
-      setAuth(res.token, { userId: res.userId, username: res.username })
+      setAuth(res.token, { userId: res.userId, username: res.username, role: res.role })
       navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'login failed')
@@ -81,6 +81,12 @@ export default function Login() {
 
         <p className="text-xs text-slate-400 text-center">
           Demo credentials: admin / admin123
+        </p>
+        <p className="text-xs text-slate-500 text-center">
+          No account?{' '}
+          <Link to="/register" className="text-brand-600 hover:underline">
+            Register
+          </Link>
         </p>
       </form>
     </div>
