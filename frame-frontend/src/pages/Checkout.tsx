@@ -40,6 +40,12 @@ export default function Checkout() {
   const [error, setError] = useState<string | null>(null)
   const [paying, setPaying] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Guards the poll callback against firing after the stage has transitioned
+  // away from 'queued' (e.g. a queued interval tick that lands after the
+  // immediate poll already resolved). Set false before transitioning; checked
+  // at the top of poll() so a stale tick early-returns instead of overwriting
+  // order state.
+  const pollingRef = useRef(true)
 
   // Clean up the poller on unmount.
   useEffect(() => {
@@ -52,21 +58,32 @@ export default function Checkout() {
   useEffect(() => {
     if (stage !== 'queued' || orderId === null) return
     const startedAt = Date.now()
+    pollingRef.current = true
 
     const poll = async () => {
+      // A prior tick (or the immediate poll) may have already transitioned
+      // the stage; bail before issuing another getOrder.
+      if (!pollingRef.current) return
       try {
         const o = await getOrder(orderId)
         // Resolved: real row (totalInCents>0) OR terminal FAILED. The synthetic
         // queued placeholder has totalInCents===0 and status=PENDING.
         const resolved = o.totalInCents > 0 || o.status === 'FAILED'
         if (resolved) {
+          // Stop further polls before transitioning so a queued interval tick
+          // can't fire a stale getOrder on top of the new state.
+          pollingRef.current = false
+          if (timerRef.current) clearInterval(timerRef.current)
           setOrder(o)
           setStage('resolved')
         }
       } catch (err) {
+        if (!pollingRef.current) return
         // A 404 here likely means the correlation id hasn't been mapped yet —
         // keep polling until timeout. Other errors surface and stop the poll.
         if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+          pollingRef.current = false
+          if (timerRef.current) clearInterval(timerRef.current)
           setError(err instanceof Error ? err.message : 'order resolution timed out')
           setStage('resolved')
         }
@@ -77,6 +94,7 @@ export default function Checkout() {
     void poll()
     timerRef.current = setInterval(poll, POLL_INTERVAL_MS)
     return () => {
+      pollingRef.current = false
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [stage, orderId])

@@ -9,6 +9,7 @@ import {
 } from '@/api/product'
 import type { Product } from '@/api/types'
 import { formatPrice } from './Products'
+import { useIsAdmin } from '@/store/useAuthStore'
 
 interface FormState {
   name: string
@@ -34,6 +35,9 @@ const EMPTY_FORM: FormState = {
  * this page is only routed to admins. Non-admins hitting it get a notice.
  */
 export default function Admin() {
+  // Client-side role gate: the nav link is hidden for non-admins, but the
+  // route itself isn't guarded, so block direct navigation to /admin.
+  const isAdmin = useIsAdmin()
   const [rows, setRows] = useState<Product[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -58,8 +62,22 @@ export default function Admin() {
   }
 
   useEffect(() => {
+    // Skip the fetch for non-admins — they'll hit the access-denied notice below.
+    if (!isAdmin) return
     void load()
-  }, [])
+  }, [isAdmin])
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <Shield className="w-10 h-10 text-slate-300" />
+        <h1 className="text-lg font-semibold text-slate-700">Admin access required</h1>
+        <p className="text-sm text-slate-500">
+          You don't have permission to view this page.
+        </p>
+      </div>
+    )
+  }
 
   function resetForm() {
     setForm(EMPTY_FORM)
