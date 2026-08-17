@@ -100,10 +100,11 @@ public class CheckoutServiceImpl implements CheckoutService {
         //    returns this correlation id so the client can poll order_status:{id}.
         Long orderId = ORDER_SEQ.incrementAndGet();
         String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct);
-        redis.opsForStream().add("orders:pending", Map.of(
-                "orderId", String.valueOf(orderId),
-                "userId", String.valueOf(userId),
-                "payload", payload));
+        // Push to a Redis List (LPUSH) instead of a Stream — avoids the Spring Data Redis
+        // Stream MapRecord deserialization scrambling issue on Redis 5.0 where multiple
+        // records in a batch share a backing map. A List is simpler: LPUSH to produce,
+        // RPOP to consume, raw string values, no consumer-group/PEL/XACK complexity.
+        redis.opsForList().leftPush("orders:pending", payload);
         redis.opsForValue().set("order_status:" + orderId, "queued");
         return new CheckoutResponse(orderId, "queued");
     }

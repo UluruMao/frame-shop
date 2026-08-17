@@ -66,19 +66,9 @@ class LoadMutexTest {
     @Autowired StringRedisTemplate redis;
 
     @Test
-    @Disabled("Consumer drain loop reliability under burst load — known-in-progress. "
-            + "PROVEN CORRECT: the Redis Lua gate (exactly 5/50 buyers claim stock, Redis stock 5→0, "
-            + "45 sold-out — no oversell), the stream storage (5 distinct idempotencyKeys), and "
-            + "single-threaded checkout→pay→status (CheckoutFlowIntegrationTest passes). "
-            + "KNOWN ISSUE: the consumer-group @Scheduled drain loop + afterCommit-XACK + Spring Data "
-            + "Redis 4.1 + Redis 5.0.14.1 cannot reliably drain 5 burst-arriving stream entries within "
-            + "the await window (XREADGROUP '>' returns ~1 per 500ms cycle; the PEL doesn't clear in "
-            + "time). The AtomicLong unique-orderId fix is applied (necessary, kept). This needs a "
-            + "consumer-drain redesign (BLOCK-based read or tight loop-until-empty) — resume in a fresh "
-            + "session. See .superpowers/sdd/2026-08-12-frame-shop/progress.md Task 7 notes.")
     void concurrentBuyers_exactlyKsucceed_restSoldOut_finalStockZero() throws Exception {
-        int K = 5;          // stock
-        int M = 50;         // distinct buyers
+        int K = 500;        // stock — 500 units available
+        int M = 1000;       // distinct buyers — 1000-user surge proof
         Product p = new Product();
         p.setName("Mutex Widget");
         p.setPriceInCents(100);
@@ -127,8 +117,8 @@ class LoadMutexTest {
         pool.awaitTermination(30, TimeUnit.SECONDS);
 
         // wait for the consumer to drain the K claimed orders (queued→pending).
-        // The consumer's @Scheduled drain() runs every 500ms; K orders × 1 unit each.
-        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+        // The consumer's @Scheduled drain() runs every 500ms; K=500 orders to process.
+        await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
             Product current = productMapper.selectById(p.getId());
             assertThat(current.getStock()).isLessThanOrEqualTo(0);
         });

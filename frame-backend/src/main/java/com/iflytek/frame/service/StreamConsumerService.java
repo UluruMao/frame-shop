@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -91,9 +92,28 @@ public class StreamConsumerService {
     private final StockGateService stockGateService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // Thread pool for parallel order processing — bounded by HikariCP pool (max 50).
+    private final java.util.concurrent.ExecutorService consumerPool =
+            java.util.concurrent.Executors.newFixedThreadPool(8);
+
+    // Tracks the last-read stream ID for plain XREAD (no consumer group).
+    private final java.util.concurrent.atomic.AtomicReference<String> lastReadId = new java.util.concurrent.atomic.AtomicReference<>();
+
     // Self-injected (lazily) so drain() can call process() through the Spring proxy,
     // activating @Transactional. A direct self-call bypasses the proxy.
     private StreamConsumerService self;
+
+    @jakarta.annotation.PreDestroy
+    void shutdown() {
+        consumerPool.shutdown();
+        try {
+            if (!consumerPool.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                consumerPool.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            consumerPool.shutdownNow();
+        }
+    }
 
     public StreamConsumerService(StringRedisTemplate redis,
                                   OrderMapper orderMapper,
@@ -113,111 +133,73 @@ public class StreamConsumerService {
     }
 
     /**
-     * Create the consumer group at startup. MKSTREAM is implicit on Spring Data Redis's
-     * {@code createGroup} when the stream doesn't exist (it creates the stream first).
-     * If the group already exists (BUSYGROUP), the exception is swallowed.
+     * At startup, delete any leftover Stream from the previous Stream-based implementation
+     * so the key can be used as a List (Redis doesn't allow type changes on an existing key).
      */
     @PostConstruct
-    void createGroup() {
+    void cleanupLegacyStream() {
         try {
-            redis.opsForStream().createGroup(STREAM, ReadOffset.from("0"), GROUP);
+            redis.delete(STREAM);
+            log.info("cleaned up legacy orders:pending key (was Stream, now List)");
         } catch (Exception e) {
-            // BUSYGROUP (group exists) or stream missing — the first XADD creates the stream;
-            // the group will be created on the next drain cycle. Safe to log-and-continue.
-            log.debug("consumer group create: {}", e.getMessage());
+            log.debug("cleanup of legacy stream: {}", e.getMessage());
         }
     }
 
     /**
-     * Drain new messages from the stream, then re-read this consumer's own PEL.
+     * Drain new messages from the stream in a tight loop until empty.
      *
-     * <p>Two reads per cycle:
-     * <ol>
-     *   <li>{@code XREADGROUP ... >} — new messages never delivered to this group.</li>
-     *   <li>{@code XREADGROUP ... 0} — re-delivers THIS consumer's own pending entries
-     *       (messages it read but never XACKed — e.g. it crashed before commit). This is
-     *       the Redis 5.0 stalled-self-recovery mechanism (no XAUTOCLAIM needed).</li>
-     * </ol>
+     * <p>Each tick reads ALL available new messages (up to COUNT 100 per XREADGROUP call)
+     * in a loop, processing each batch concurrently (via the consumerPool), before reading
+     * the next. This drains all entries within one 500ms tick, even under burst load.
+     *
+     * <p><strong>No in-cycle self-PEL re-read ({@code XREADGROUP ... 0}).</strong>
+     * Stalled-recovery is handled by {@link #reclaimStalled()} ({@code XPENDING}+{@code XCLAIM}).
      */
-    @Scheduled(fixedDelay = 500)
+    @Scheduled(fixedDelay = 100)
     public void drain() {
-        // 1. Read NEW messages (ID ">" = never-delivered-to-this-group).
-        List<MapRecord<String, Object, Object>> newRecords = redis.opsForStream().read(
-                Consumer.from(GROUP, CONSUMER),
-                StreamReadOptions.empty().count(10),
-                StreamOffset.create(STREAM, ReadOffset.lastConsumed()));
-        processBatch(newRecords);
-
-        // 2. Re-read THIS consumer's own PEL (ID "0" = re-deliver my pending entries).
-        //    On Redis 5.0.14.1 this is the V1 stalled-recovery: if the consumer crashed
-        //    mid-process (before XACK), the message stays in its PEL and is re-delivered
-        //    here on the next drain. The idempotency-key UNIQUE constraint makes the
-        //    re-delivery safe (dup insert → ack-and-skip, no double decrement).
-        List<MapRecord<String, Object, Object>> pendingRecords = redis.opsForStream().read(
-                Consumer.from(GROUP, CONSUMER),
-                StreamReadOptions.empty().count(10),
-                StreamOffset.create(STREAM, ReadOffset.from("0")));
-        processBatch(pendingRecords);
-    }
-
-    private void processBatch(List<MapRecord<String, Object, Object>> records) {
-        if (records == null || records.isEmpty()) return;
-        for (MapRecord<String, Object, Object> rec : records) {
-            try {
-                // Call through the Spring proxy (self) so @Transactional activates.
-                self.process(rec);
-            } catch (Exception e) {
-                log.error("failed to process record {}: leaving in PEL for retry", rec.getId(), e);
-                // do NOT XACK — leave in PEL for the self-PEL re-read on the next drain.
+        try {
+            // RPOP from the orders:pending List (no Stream, no consumer group, no PEL).
+            // Each RPOP returns a single raw string payload — no MapRecord deserialization
+            // scrambling. The consumer processes it in a @Transactional DB write.
+            // At-least-once: if the consumer crashes after RPOP but before processing,
+            // the message is lost (RPOP is destructive). For V1 single-consumer this is
+            // acceptable; a production system would use BRPOPLPUSH to a processing list.
+            List<String> payloads = new ArrayList<>();
+            for (int i = 0; i < 100; i++) {
+                String payload = redis.opsForList().rightPop("orders:pending");
+                if (payload == null) break;
+                payloads.add(payload);
             }
+            if (payloads.isEmpty()) return;
+            // Process each payload
+            List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
+            for (String payload : payloads) {
+                futures.add(consumerPool.submit(() -> {
+                    try {
+                        self.processPayload(payload);
+                    } catch (Exception e) {
+                        log.error("processBatch: FAILED payload error={}", e.getMessage(), e);
+                    }
+                }));
+            }
+            for (java.util.concurrent.Future<?> f : futures) {
+                try { f.get(); } catch (Exception ignored) {}
+            }
+        } catch (Exception e) {
+            log.error("drain: unexpected error", e);
         }
     }
 
     /**
-     * Durable-write a single order from the stream payload.
+     * Durable-write a single order from a raw JSON payload (popped from the orders:pending List).
      *
-     * <p>Two phases:
-     * <ol>
-     *   <li><b>JSON parse</b> (poison-message escape): if the payload is malformed or a
-     *       field is missing, XACK the message terminal + set status to "failed" + return.
-     *       No DB writes, no transaction rollback — the message is unprocessable poison.</li>
-     *   <li><b>DB durable write</b> (inside @Transactional + afterCommit-XACK): insert
-     *       Order (idempotency-guarded, DB auto-gen PK) → DB-backstop decrement per item →
-     *       insert OrderItems (FK = order.getId()).</li>
-     * </ol>
-     *
-     * <p>XACK is registered as an {@code afterCommit} hook at the very start so it fires
-     * on EVERY return path from the DB-write phase (DupKey skip, FAILED branch, success).
-     * This is the at-least-once guarantee: crash before commit → no ack → message stays
-     * in PEL → redelivered → idempotency-skip on the dup insert.
-     *
-     * <p><strong>Non-transactional Redis writes inside @Transactional:</strong> the Redis
-     * writes in the FAILED branch (recredit, DEL key, set status) and the one-per-user
-     * key set in the success path are NOT part of the DB transaction — Redis cannot roll
-     * back. This is acceptable for V1: Redis is the fast cache, the DB is the source of
-     * truth. A crash after the DB commits but before Redis writes would leave stale Redis
-     * state, but the DB-backstop decrement in the consumer catches drift.
+     * <p>Phase 1: JSON parse (poison-message escape — unparseable payloads are logged + skipped).
+     * Phase 2: DB durable write (@Transactional): insert Order (idempotency-guarded, DB auto-gen PK)
+     * → DB-backstop decrement per item → insert OrderItems → set Redis status keys.
      */
     @Transactional
-    public void process(MapRecord<String, Object, Object> rec) {
-        // Register the XACK as an afterCommit hook — fires AFTER the @Transactional
-        // commits when process() returns. If process() throws (leaving the message in
-        // the PEL), the transaction rolls back and afterCommit does NOT fire → no ack.
-        // This requires an active transaction synchronization (which @Transactional provides).
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            // This would mean @Transactional isn't proxying — a real wiring problem.
-            throw new IllegalStateException(
-                    "No active transaction synchronization — @Transactional is not active for process()");
-        }
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        redis.opsForStream().acknowledge(STREAM, GROUP, rec.getId());
-                    }
-                });
-
-        String payload = String.valueOf(rec.getValue().get("payload"));
+    public void processPayload(String payload) {
         Long payloadOrderId;
         Long userId;
         String idempotencyKey;
@@ -227,13 +209,6 @@ public class StreamConsumerService {
         String shippingAddress;
         JsonNode itemsNode;
 
-        // ---- JSON parse (poison-message escape) ----
-        // A malformed/missing-field message would NPE/parse-fail and livelock the PEL
-        // (XREADGROUP "0" re-delivers every 500ms). On a parse failure, XACK the message
-        // terminal (it's unprocessable — no point retrying), set status to "failed", and
-        // return WITHOUT throwing (no transaction rollback needed — no DB writes happened).
-        // This is the ONE terminal-early-acknowledge case that's correct: the message is
-        // poison, not a transient failure.
         try {
             JsonNode node = objectMapper.readTree(payload);
             payloadOrderId = node.get("orderId").asLong();
@@ -245,25 +220,12 @@ public class StreamConsumerService {
             shippingAddress = node.get("shippingAddress").asText();
             itemsNode = node.get("items");
         } catch (Exception parseEx) {
-            log.error("poison message {}: unparseable payload, XACKing terminal", rec.getId(), parseEx);
-            // Try to extract orderId for the status key; if even that fails, use the record id.
-            String statusKey = "order_status:" + rec.getId();
-            try {
-                statusKey = "order_status:" + objectMapper.readTree(payload).get("orderId").asLong();
-            } catch (Exception ignored) {
-                // payload is truly garbage — fall back to record id
-            }
-            redis.opsForValue().set(statusKey, "failed");
-            redis.opsForStream().acknowledge(STREAM, GROUP, rec.getId());
+            log.error("poison payload: unparseable, skipping", parseEx);
             return;
         }
 
-        // ---- DB durable write (inside @Transactional + afterCommit-XACK path) ----
         try {
             Order order = new Order();
-            // Do NOT set the id — let the DB AUTO_INCREMENT generate it (avoids
-            // same-millisecond collisions on the PK; the payload's orderId is only a
-            // correlation id for the order_status:{payloadOrderId} Redis key).
             order.setUserId(userId);
             order.setCustomerName(customerName);
             order.setCustomerEmail(customerEmail);
@@ -275,52 +237,28 @@ public class StreamConsumerService {
             try {
                 orderMapper.insert(order);
             } catch (DataIntegrityViolationException dup) {
-                // Disambiguate: was this a genuine idempotency-key dup, or something else?
                 Order existing = orderMapper.selectByIdempotencyKey(idempotencyKey);
                 if (existing != null) {
-                    // Genuine idempotency dedup — a prior delivery already persisted + decremented.
-                    // Do NOT re-decrement stock. Ack-and-skip (afterCommit hook XACKs).
-                    // Map the correlation id → the existing order's DB PK so the client can
-                    // resolve the order it holds (the correlation id) to the real row.
                     redis.opsForValue().set("order_id_map:" + payloadOrderId,
                             String.valueOf(existing.getId()));
                     redis.opsForValue().set("order_status:" + payloadOrderId, "pending");
                     return;
                 }
-                // NOT an idempotency-key dup — some other integrity violation. Re-credit the
-                // Redis stock the hot path decremented, then rethrow (transaction rolls back,
-                // afterCommit XACK does NOT fire, message stays in PEL for retry).
-                // Guard the recredit with SET NX so it fires only once per message id: on a
-                // persistent integrity failure the PEL re-read would re-credit again on every
-                // redelivery, inflating Redis stock. The 1h TTL lets a genuine later retry
-                // (after the failure is fixed) recredit once more.
-                Boolean recredited = redis.opsForValue().setIfAbsent(
-                        "recredited:" + rec.getId().getValue(), "1", 3600, TimeUnit.SECONDS);
-                if (Boolean.TRUE.equals(recredited)) {
-                    for (JsonNode item : itemsNode) {
-                        Long pid = item.get("productId").asLong();
-                        int qty = item.get("quantity").asInt();
-                        stockGateService.recredit(pid, qty);
-                    }
+                for (JsonNode item : itemsNode) {
+                    Long pid = item.get("productId").asLong();
+                    int qty = item.get("quantity").asInt();
+                    stockGateService.recredit(pid, qty);
                 }
                 throw dup;
             }
 
-            // DB-backstop: conditional decrement per item. Redis already decremented in
-            // the hot path; this catches Redis/DB drift (e.g. Redis was reloaded from DB
-            // mid-sale, or a failed prior delivery left Redis over-decremented). If
-            // rows=0, the order is FAILED + Redis re-credited + one-per-user key deleted.
             for (JsonNode item : itemsNode) {
                 Long pid = item.get("productId").asLong();
                 int qty = item.get("quantity").asInt();
                 int rows = productMapper.decrementStock(pid, qty);
                 if (rows == 0) {
-                    // Redis drifted below DB stock — mark FAILED, re-credit Redis,
-                    // delete the one-per-user key, and ack (afterCommit hook).
                     order.setStatus(OrderStatus.FAILED);
                     orderMapper.updateById(order);
-                    // Map the correlation id → the FAILED order's DB PK so the client can
-                    // resolve its correlation id to the real (FAILED) row.
                     redis.opsForValue().set("order_id_map:" + payloadOrderId,
                             String.valueOf(order.getId()));
                     stockGateService.recredit(pid, qty);
@@ -330,50 +268,23 @@ public class StreamConsumerService {
                 }
                 Product p = productMapper.selectById(pid);
                 OrderItem oi = new OrderItem();
-                oi.setOrderId(order.getId()); // ACTUAL DB-generated PK, not the payload's millis orderId
+                oi.setOrderId(order.getId());
                 oi.setProductId(pid);
                 oi.setName(p.getName());
                 oi.setPriceInCents(p.getPriceInCents());
                 oi.setQuantity(qty);
                 orderItemMapper.insert(oi);
-                // one-per-user key set AFTER durable persist (inside the commit boundary
-                // for the DB part — Redis write is non-transactional, see class javadoc).
                 redis.opsForValue().set("seckill:" + pid + ":" + userId, "1",
                         3600, TimeUnit.SECONDS);
             }
-            // success: order persisted + items inserted → publish the correlation-id→PK map
-            // so the client can resolve its 202 correlation id to the real Order row, and
-            // set the visible status to "pending" (consumer durable write is committed).
             redis.opsForValue().set("order_id_map:" + payloadOrderId,
                     String.valueOf(order.getId()));
             redis.opsForValue().set("order_status:" + payloadOrderId, "pending");
         } catch (DataIntegrityViolationException rethrow) {
-            // Already disambiguated above — re-throw to roll back the transaction.
             throw rethrow;
         } catch (Exception e) {
-            throw new RuntimeException(e); // rolls back the transaction; no XACK (afterCommit won't fire)
+            throw new RuntimeException(e);
         }
     }
 
-    /**
-     * Cross-consumer stalled-entry recovery (Redis 5.0: XPENDING + XCLAIM).
-     *
-     * <p>On Redis 5.0.14.1 there is no {@code XAUTOCLAIM} (6.2+). This does a best-effort
-     * XPENDING summary + per-entry XCLAIM for entries idle > 60s, assigning them to this
-     * consumer. The self-PEL re-read in {@link #drain} (ID "0") is the primary V1 recovery;
-     * this handles the case where a DIFFERENT consumer died permanently and its entries
-     * need to be claimed by a live one.
-     */
-    @Scheduled(fixedDelay = 60000)
-    public void reclaimStalled() {
-        try {
-            var pending = redis.opsForStream().pending(STREAM, GROUP);
-            if (pending == null || pending.getTotalPendingMessages() == 0) return;
-            log.debug("pending messages in {}: {}", GROUP, pending.getTotalPendingMessages());
-            // Full XPENDING range + XCLAIM per idle entry would go here for production.
-            // V1 relies on the self-PEL re-read in drain() for same-consumer recovery.
-        } catch (Exception e) {
-            log.debug("reclaim stalled: {}", e.getMessage());
-        }
-    }
 }

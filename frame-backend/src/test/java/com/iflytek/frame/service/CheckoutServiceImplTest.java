@@ -12,8 +12,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.StreamOperations;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.util.List;
@@ -30,9 +30,8 @@ import static org.mockito.Mockito.*;
  * Unit tests for the async hot-path checkout (Taobao seckill model).
  *
  * <p>The hot path: aggregate → {@code selectBatchIds} (server-side price) → Redis Lua gate
- * ({@code tryClaimStock}) → compute total → XADD to {@code orders:pending} → set
- * {@code order_status:{id}="queued"} → return 202. No DB writes in the hot path — the
- * durable write is the consumer's job (tested via the integration test in Task 7).
+ * ({@code tryClaimStock}) → compute total → LPUSH to {@code orders:pending} → set
+ * {@code order_status:{id}="queued"} → return 202. No DB writes in the hot path.
  */
 @ExtendWith(MockitoExtension.class)
 class CheckoutServiceImplTest {
@@ -40,7 +39,7 @@ class CheckoutServiceImplTest {
     @Mock StringRedisTemplate redis;
     @Mock ProductMapper productMapper;
     @Mock StockGateService stockGateService;
-    @Mock StreamOperations<String, Object, Object> streamOps;
+    @Mock ListOperations<String, String> listOps;
     @Mock ValueOperations<String, String> valueOps;
     @InjectMocks CheckoutServiceImpl checkoutService;
 
@@ -58,14 +57,14 @@ class CheckoutServiceImplTest {
     }
 
     @Test
-    void checkout_stockClaimed_xaddsAndReturnsQueued() {
+    void checkout_stockClaimed_lpushAndReturnsQueued() {
         Product p = new Product();
         p.setId(1L);
         p.setPriceInCents(1999);
         p.setStock(5);
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
         when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn(true);
-        when(redis.opsForStream()).thenReturn(streamOps);
+        when(redis.opsForList()).thenReturn(listOps);
         when(redis.opsForValue()).thenReturn(valueOps);
 
         CheckoutResponse resp = checkoutService.checkout(req("key-1"), 7L);
@@ -73,9 +72,7 @@ class CheckoutServiceImplTest {
         assertThat(resp.getStatus()).isEqualTo("queued");
         assertThat(resp.getOrderId()).isNotNull();
         verify(stockGateService).tryClaimStock(List.of(1L), List.of(2));
-        // XADD to orders:pending (the durable-write queue)
-        verify(streamOps).add(eq("orders:pending"), any());
-        // order_status set to "queued"
+        verify(listOps).leftPush(eq("orders:pending"), any());
         verify(valueOps).set(startsWith("order_status:"), eq("queued"));
     }
 
@@ -86,17 +83,15 @@ class CheckoutServiceImplTest {
         p.setPriceInCents(1999);
         p.setStock(1);
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
-        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn(false); // FAIL
+        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn(false);
 
         assertThatThrownBy(() -> checkoutService.checkout(req("key-2"), 7L))
                 .isInstanceOf(BusinessException.class);
-        // must NOT XADD — the order is not queued when stock gate fails
-        verify(redis, never()).opsForStream();
+        verify(redis, never()).opsForList();
     }
 
     @Test
     void checkout_productNotFound_throwsNotFound() {
-        // selectBatchIds returns empty list (product vanished) — size mismatch
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of());
 
         assertThatThrownBy(() -> checkoutService.checkout(req("key-3"), 7L))
@@ -111,7 +106,7 @@ class CheckoutServiceImplTest {
         a.setQuantity(2);
         OrderItemDTO b = new OrderItemDTO();
         b.setProductId(1L);
-        b.setQuantity(3); // same product — should aggregate to qty=5
+        b.setQuantity(3);
         CheckoutRequest r = new CheckoutRequest();
         r.setItems(List.of(a, b));
         r.setCustomerName("Bob");
@@ -125,17 +120,15 @@ class CheckoutServiceImplTest {
         p.setStock(10);
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
         when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn(true);
-        when(redis.opsForStream()).thenReturn(streamOps);
+        when(redis.opsForList()).thenReturn(listOps);
         when(redis.opsForValue()).thenReturn(valueOps);
 
         CheckoutResponse resp = checkoutService.checkout(r, 7L);
 
         assertThat(resp.getStatus()).isEqualTo("queued");
-        // aggregated: single product with qty=5 (not two separate decrements)
         verify(stockGateService).tryClaimStock(List.of(1L), List.of(5));
     }
 
-    // Mockito argThat returns a String but the lambda needs to match prefix.
     private static String startsWith(String prefix) {
         return org.mockito.ArgumentMatchers.argThat(s -> s != null && s.startsWith(prefix));
     }
