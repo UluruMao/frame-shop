@@ -11,6 +11,19 @@ import type { Product } from '@/api/types'
 import { formatPrice } from './Products'
 import { useIsAdmin } from '@/store/useAuthStore'
 
+/**
+ * Convert an ISO datetime string (e.g. "2026-08-17T13:00:00") to the
+ * `YYYY-MM-DDTHH:MM` format a `datetime-local` input requires (no seconds/ms).
+ * Returns '' for null/empty so the input stays empty for new products.
+ */
+function toDatetimeLocal(iso: string | undefined): string {
+  if (!iso) return ''
+  // Strip seconds/milliseconds/timezone: "2026-08-17T13:00:00" → "2026-08-17T13:00"
+  const spaceIdx = iso.indexOf('T')
+  if (spaceIdx === -1) return iso.slice(0, 16)
+  return iso.slice(0, 16)
+}
+
 interface FormState {
   name: string
   priceInCents: string
@@ -18,6 +31,7 @@ interface FormState {
   category: string
   description: string
   isFlashSale: boolean
+  flashSaleAt: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -27,6 +41,7 @@ const EMPTY_FORM: FormState = {
   category: '',
   description: '',
   isFlashSale: false,
+  flashSaleAt: '',
 }
 
 /**
@@ -93,6 +108,7 @@ export default function Admin() {
       category: p.category ?? '',
       description: p.description ?? '',
       isFlashSale: !!p.isFlashSale,
+      flashSaleAt: toDatetimeLocal(p.flashSaleAt),
     })
   }
 
@@ -107,6 +123,7 @@ export default function Admin() {
       category: form.category || undefined,
       description: form.description || undefined,
       isFlashSale: form.isFlashSale,
+      flashSaleAt: form.isFlashSale && form.flashSaleAt ? form.flashSaleAt : undefined,
     }
     try {
       if (editingId !== null) {
@@ -209,6 +226,19 @@ export default function Admin() {
           />
           Flash sale item
         </label>
+        {form.isFlashSale && (
+          <label className="flex flex-col gap-1 text-sm text-slate-600">
+            <span className="text-xs text-slate-500">
+              Flash sale opens at (auto-opens via scheduled job; leave blank for manual open)
+            </span>
+            <input
+              type="datetime-local"
+              className="px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={form.flashSaleAt}
+              onChange={(e) => setForm({ ...form, flashSaleAt: e.target.value })}
+            />
+          </label>
+        )}
         <div className="flex gap-2">
           <button
             type="submit"
@@ -242,6 +272,7 @@ export default function Admin() {
                 <th className="text-right px-4 py-2 font-medium">Price</th>
                 <th className="text-right px-4 py-2 font-medium">Stock</th>
                 <th className="text-left px-4 py-2 font-medium">Flash</th>
+                <th className="text-left px-4 py-2 font-medium">Sale at</th>
                 <th className="text-right px-4 py-2 font-medium">Actions</th>
               </tr>
             </thead>
@@ -260,6 +291,16 @@ export default function Admin() {
                     ) : (
                       <span className="text-xs text-slate-300">No</span>
                     )}
+                  </td>
+                  <td className="px-4 py-2 text-xs text-slate-600">
+                    {p.flashSaleAt
+                      ? new Date(p.flashSaleAt).toLocaleString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -295,7 +336,7 @@ export default function Admin() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
                     No products yet. Create one above.
                   </td>
                 </tr>

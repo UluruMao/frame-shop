@@ -1,5 +1,6 @@
 package com.iflytek.frame.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.exception.BusinessException;
@@ -7,13 +8,17 @@ import com.iflytek.frame.mapper.ProductMapper;
 import com.iflytek.frame.service.StockGateService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scripting.support.ResourceScriptSource;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -21,6 +26,8 @@ import java.util.stream.IntStream;
 @Service
 @RequiredArgsConstructor
 public class StockGateServiceImpl implements StockGateService {
+
+    private static final Logger log = LoggerFactory.getLogger(StockGateServiceImpl.class);
 
     private final StringRedisTemplate redis;
     private final ProductMapper productMapper;
@@ -67,5 +74,44 @@ public class StockGateServiceImpl implements StockGateService {
     @Override
     public void recredit(Long productId, int qty) {
         redis.opsForValue().increment("stock:" + productId, qty);
+    }
+
+    /**
+     * Functional time-gated flash sales: every 10s, scan for products flagged
+     * {@code is_flash_sale = true} whose {@code flash_sale_at <= NOW()} and whose
+     * {@code stock:{id}} key is NOT yet in Redis (sale not yet opened). For each,
+     * call {@link #loadStock(Long)} to auto-open the sale at the configured time.
+     *
+     * <p>This means a flash sale actually opens at {@code flashSaleAt} without an
+     * admin manually clicking "open sale." The admin's manual
+     * {@code POST /admin/sales/{productId}} endpoint stays for immediate testing.
+     *
+     * <p>Guarded by {@code hasKey} so a sale already in progress (key exists) is
+     * never re-loaded mid-flight (which would reset Redis stock to DB stock,
+     * losing decrements). {@code @Scheduled} is enabled by
+     * {@code @EnableScheduling} on {@link com.iflytek.frame.FrameBackendApplication}.
+     */
+    @Scheduled(fixedRate = 10_000)
+    public void openDueFlashSales() {
+        LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Product::isFlashSale, true).le(Product::getFlashSaleAt, LocalDateTime.now());
+        List<Product> due;
+        try {
+            due = productMapper.selectList(wrapper);
+        } catch (Exception e) {
+            log.warn("Flash-sale scheduler DB scan failed: {}", e.getMessage());
+            return;
+        }
+        for (Product p : due) {
+            String key = "stock:" + p.getId();
+            try {
+                if (Boolean.FALSE.equals(redis.hasKey(key))) {
+                    log.info("Auto-opening flash sale for product {} (flashSaleAt={})", p.getId(), p.getFlashSaleAt());
+                    loadStock(p.getId());
+                }
+            } catch (Exception e) {
+                log.warn("Flash-sale scheduler failed to open product {}: {}", p.getId(), e.getMessage());
+            }
+        }
     }
 }
