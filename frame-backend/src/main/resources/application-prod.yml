@@ -1,0 +1,61 @@
+# ===== application-prod.yml — Linux production profile =====
+# Activate with: java -jar frame-backend-*.jar --spring.profiles.active=prod
+# This file overrides application.yml for production. Secrets should be env vars in a real deploy.
+
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:mariadb://localhost:3306/frame_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: frame_app
+    password: ${FRAME_DB_PASSWORD:change_me_in_prod}
+    hikari:
+      pool-name: FrameHikariPool
+      minimum-idle: 10
+      maximum-pool-size: 50
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      connection-test-query: SELECT 1
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ${FRAME_REDIS_PASSWORD:}
+      database: 0
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 0
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+# MyBatis-Plus — disable SQL stdout logging in prod
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    # log-impl removed in prod (was StdOutImpl in dev)
+
+frame:
+  jwt:
+    secret: ${FRAME_JWT_SECRET:change_me_to_a_long_random_base64_secret_at_least_256_bits}
+    expire: 86400
+    header: Authorization
+    token-prefix: "Bearer "
+  cors:
+    allowed-origins: ${FRAME_CORS_ORIGINS:http://localhost}
+  upload:
+    dir: /var/lib/frame/uploads
+  rate-limit:
+    checkout-per-minute: 10
+
+logging:
+  level:
+    com.iflytek.frame: info
+    org.springframework.security: warn

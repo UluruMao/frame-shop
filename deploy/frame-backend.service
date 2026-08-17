@@ -1,0 +1,17 @@
+[Unit]
+Description=Frame Shop Backend (Spring Boot)
+After=network.target mariadb.service redis-server.service
+
+[Service]
+Type=simple
+User=frame
+Group=frame
+WorkingDirectory=/opt/frame
+ExecStart=/usr/bin/java -jar /opt/frame/frame-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
