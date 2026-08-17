@@ -5,9 +5,11 @@ import com.iflytek.frame.common.Result;
 import com.iflytek.frame.common.ResultCode;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -36,11 +38,21 @@ import java.util.List;
  */
 @Configuration
 @RequiredArgsConstructor
+@EnableConfigurationProperties(RateLimitProperties.class)
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CorsProperties corsProperties;
     private final ApplicationContext applicationContext;
+    private final StringRedisTemplate redisTemplate;
+    private final RateLimitProperties rateLimitProperties;
+
+    /** Per-user token-bucket on {@code POST /checkout}. Runs AFTER the JWT filter
+     *  so the {@code SecurityContextHolder} already has the authenticated principal. */
+    @Bean
+    public RateLimitFilter rateLimitFilter() {
+        return new RateLimitFilter(redisTemplate, rateLimitProperties, applicationContext);
+    }
 
     /** Resolved lazily so the security config doesn't hard-require an ObjectMapper bean at startup. */
     private ObjectMapper objectMapper() {
@@ -104,7 +116,13 @@ public class SecurityConfig {
                         .accessDeniedHandler((req, resp, ex) ->
                                 writeError(resp, HttpServletResponse.SC_FORBIDDEN,
                                         ResultCode.FORBIDDEN, "access denied")))
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                // JWT filter runs before the username/password filter (standard stateless setup).
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // Rate limiter runs AFTER the JWT filter so the SecurityContextHolder
+                // already holds the authenticated principal (needed for the userId bucket key).
+                // Note: must register the JWT filter first, otherwise its order is unknown
+                // and addFilterAfter cannot resolve the anchor.
+                .addFilterAfter(rateLimitFilter(), JwtAuthenticationFilter.class);
 
         return http.build();
     }

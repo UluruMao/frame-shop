@@ -63,7 +63,7 @@ class CheckoutServiceImplTest {
         p.setPriceInCents(1999);
         p.setStock(5);
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
-        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn(true);
+        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("OK");
         when(redis.opsForList()).thenReturn(listOps);
         when(redis.opsForValue()).thenReturn(valueOps);
 
@@ -83,10 +83,27 @@ class CheckoutServiceImplTest {
         p.setPriceInCents(1999);
         p.setStock(1);
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
-        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn(false);
+        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("FAIL");
 
         assertThatThrownBy(() -> checkoutService.checkout(req("key-2"), 7L))
-                .isInstanceOf(BusinessException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("code").isEqualTo(409);
+        verify(redis, never()).opsForList();
+    }
+
+    @Test
+    void checkout_stockNotInitialized_throwsServiceUnavailable() {
+        // Gap 3b: missing stock:{pid} key → "NOT_INITIALIZED" → 503, distinct from 409 sold out.
+        Product p = new Product();
+        p.setId(1L);
+        p.setPriceInCents(1999);
+        p.setStock(5);
+        when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
+        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("NOT_INITIALIZED");
+
+        assertThatThrownBy(() -> checkoutService.checkout(req("key-2b"), 7L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("code").isEqualTo(503);
         verify(redis, never()).opsForList();
     }
 
@@ -119,7 +136,7 @@ class CheckoutServiceImplTest {
         p.setPriceInCents(1000);
         p.setStock(10);
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
-        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn(true);
+        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("OK");
         when(redis.opsForList()).thenReturn(listOps);
         when(redis.opsForValue()).thenReturn(valueOps);
 

@@ -85,16 +85,21 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         // 3. Redis Lua gate (atomic, all-or-nothing — no partial decrements on FAIL).
         //    Gap 3: catch Redis outage → 503 (fail-closed, never bypass the gate).
+        //    Gap 3b: the Lua script returns a tri-state String — "OK" proceed, "FAIL"
+        //    sold-out 409, "NOT_INITIALIZED" stock-not-loaded 503 (distinct from sold out).
         List<Long> ids = new ArrayList<>(qtyByProduct.keySet());
         List<Integer> qtys = ids.stream().map(qtyByProduct::get).collect(Collectors.toList());
-        boolean claimed;
+        String claimResult;
         try {
-            claimed = stockGateService.tryClaimStock(ids, qtys);
+            claimResult = stockGateService.tryClaimStock(ids, qtys);
         } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
             throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE, "stock gate unavailable");
         }
-        if (!claimed) {
-            throw new BusinessException(ResultCode.CONFLICT, "sold out");
+        switch (claimResult) {
+            case "OK" -> { /* proceed — stock atomically decremented in Redis */ }
+            case "NOT_INITIALIZED" -> throw new BusinessException(
+                    ResultCode.SERVICE_UNAVAILABLE, "stock not initialized");
+            default -> throw new BusinessException(ResultCode.CONFLICT, "sold out");
         }
 
         // 4. Compute total from DB prices.

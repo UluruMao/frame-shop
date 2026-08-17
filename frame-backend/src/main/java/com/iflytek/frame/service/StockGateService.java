@@ -3,8 +3,11 @@ package com.iflytek.frame.service;
 import java.util.List;
 
 public interface StockGateService {
-    /** Atomic Lua check-and-decrement for all items. true = all claimed; false = none mutated. */
-    boolean tryClaimStock(List<Long> productIds, List<Integer> quantities);
+    /** Atomic Lua check-and-decrement for all items.
+     *  Returns "OK" if all claimed; "FAIL" if a key exists but stock < qty (sold out);
+     *  "NOT_INITIALIZED" if any stock:{pid} key is missing (sale never loaded). No partial
+     *  mutations occur unless the result is "OK". */
+    String tryClaimStock(List<Long> productIds, List<Integer> quantities);
 
     /** Sale-open: load stock:{id} from DB into Redis. */
     void loadStock(Long productId);

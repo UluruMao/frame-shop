@@ -36,7 +36,7 @@ public class StockGateServiceImpl implements StockGateService {
     }
 
     @Override
-    public boolean tryClaimStock(List<Long> productIds, List<Integer> quantities) {
+    public String tryClaimStock(List<Long> productIds, List<Integer> quantities) {
         List<String> keys = productIds.stream().map(id -> "stock:" + id).collect(Collectors.toList());
         String[] args = quantities.stream().map(String::valueOf).toArray(String[]::new);
         // Pass the String[] WITHOUT a cast so the compiler unwraps it into the
@@ -44,7 +44,10 @@ public class StockGateServiceImpl implements StockGateService {
         // via tonumber(ARGV[i]). Casting to (Object) would pass the whole array as a
         // single vararg element, breaking real Redis execution.
         String result = redis.execute(stockGateScript, keys, args);
-        return "OK".equals(result);
+        // result is "OK" | "FAIL" | "NOT_INITIALIZED" (see stock_gate.lua). The caller
+        // (CheckoutServiceImpl) maps each to an HTTP status. Null defensively → FAIL
+        // (fail-closed: if Redis returned nothing, don't claim stock).
+        return result != null ? result : "FAIL";
     }
 
     @Override
