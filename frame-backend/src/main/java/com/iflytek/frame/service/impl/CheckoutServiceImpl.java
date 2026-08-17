@@ -76,10 +76,23 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new BusinessException(ResultCode.NOT_FOUND, "one or more products not found");
         }
 
+        // 2b. One-per-user check (spec §6 step 3): reject users who already purchased.
+        for (Long pid : qtyByProduct.keySet()) {
+            if (Boolean.TRUE.equals(redis.hasKey("seckill:" + pid + ":" + userId))) {
+                throw new BusinessException(ResultCode.CONFLICT, "already purchased this item");
+            }
+        }
+
         // 3. Redis Lua gate (atomic, all-or-nothing — no partial decrements on FAIL).
+        //    Gap 3: catch Redis outage → 503 (fail-closed, never bypass the gate).
         List<Long> ids = new ArrayList<>(qtyByProduct.keySet());
         List<Integer> qtys = ids.stream().map(qtyByProduct::get).collect(Collectors.toList());
-        boolean claimed = stockGateService.tryClaimStock(ids, qtys);
+        boolean claimed;
+        try {
+            claimed = stockGateService.tryClaimStock(ids, qtys);
+        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
+            throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE, "stock gate unavailable");
+        }
         if (!claimed) {
             throw new BusinessException(ResultCode.CONFLICT, "sold out");
         }
@@ -91,19 +104,9 @@ public class CheckoutServiceImpl implements CheckoutService {
             totalInCents += byId.get(e.getKey()).getPriceInCents() * e.getValue();
         }
 
-        // 5. XADD to orders:pending + set order_status = queued, return 202.
-        //    orderId is a UNIQUE-per-call CORRELATION ID (AtomicLong, seeded from millis) for the
-        //    order_status:{orderId} Redis key — NOT the Order row's DB PK. The consumer lets the
-        //    DB AUTO_INCREMENT generate the real PK. Uniqueness is critical: a shared orderId field
-        //    value across stream entries triggers Spring Data Redis deserialization confusion (the
-        //    consumer reads the wrong payload for a record → order loss). The CheckoutResponse
-        //    returns this correlation id so the client can poll order_status:{id}.
+        // 5. LPUSH to orders:pending + set order_status = queued, return 202.
         Long orderId = ORDER_SEQ.incrementAndGet();
         String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct);
-        // Push to a Redis List (LPUSH) instead of a Stream — avoids the Spring Data Redis
-        // Stream MapRecord deserialization scrambling issue on Redis 5.0 where multiple
-        // records in a batch share a backing map. A List is simpler: LPUSH to produce,
-        // RPOP to consume, raw string values, no consumer-group/PEL/XACK complexity.
         redis.opsForList().leftPush("orders:pending", payload);
         redis.opsForValue().set("order_status:" + orderId, "queued");
         return new CheckoutResponse(orderId, "queued");

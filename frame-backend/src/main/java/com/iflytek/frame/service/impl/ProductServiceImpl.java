@@ -11,6 +11,7 @@ import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.mapper.ProductMapper;
 import com.iflytek.frame.service.ProductService;
+import com.iflytek.frame.service.StockGateService;
 import com.iflytek.frame.util.PageQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -35,6 +36,7 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductMapper mapper;
     private final StringRedisTemplate redis;
+    private final StockGateService stockGateService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${frame.upload.dir:./uploads}")
@@ -96,6 +98,10 @@ public class ProductServiceImpl implements ProductService {
         existing.setDescription(dto.getDescription());
         mapper.updateById(existing);
         redis.delete("product:" + id);
+        // Gap 4: resync the Lua-gate stock:{id} key if it exists (active sale)
+        if (Boolean.TRUE.equals(redis.hasKey("stock:" + id))) {
+            stockGateService.loadStock(id);
+        }
         return existing;
     }
 
