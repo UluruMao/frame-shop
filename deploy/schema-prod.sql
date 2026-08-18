@@ -77,6 +77,10 @@ INSERT IGNORE INTO `user` (`username`, `password_hash`, `role`) VALUES
     ('admin', '$2a$10$7FzLk9ItV8zh8fPkg9WJKuTOy.cxJ61NXxGVmYaSAGg9RlBxYYfKC', 'ADMIN');
 
 -- Seed demo products (only if product table is empty)
-INSERT IGNORE INTO `product` (`name`, `price_in_cents`, `stock`, `category`, `is_flash_sale`, `description`) VALUES
-    ('Flash Widget', 1999, 5, 'widgets', 1, 'Limited flash-sale item'),
-    ('Demo Gadget', 2950, 50, 'gadgets', 0, 'Regular item');
+-- Flash Widget: is_flash_sale=1 with flash_sale_at=NOW() so the time-gated scheduler
+-- (StockGateServiceImpl.openDueFlashSales, runs every 10s) auto-opens it on boot — no
+-- admin click needed to demo the flow. (The manual POST /admin/sales/{id} endpoint still
+-- works for immediate/open-now testing.) Demo Gadget is a regular, non-flash product.
+INSERT IGNORE INTO `product` (`name`, `price_in_cents`, `stock`, `category`, `is_flash_sale`, `flash_sale_at`, `description`) VALUES
+    ('Flash Widget', 1999, 5, 'widgets', 1, NOW(), 'Limited flash-sale item'),
+    ('Demo Gadget', 2950, 50, 'gadgets', 0, NULL, 'Regular item');

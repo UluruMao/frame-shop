@@ -51,13 +51,20 @@ scp deploy/* user@server:/opt/frame/deploy/
 
 ```bash
 # On the server
+# Create the dedicated service user the systemd unit runs as (User=frame)
+sudo useradd --system --create-home --shell /usr/sbin/nologin frame
 sudo mkdir -p /opt/frame /var/lib/frame/uploads /var/www/frame-frontend
-sudo chown -R frame:frame /opt/frame /var/lib/frame /var/www/frame-frontend
+sudo chown -R frame:frame /opt/frame /var/lib/frame
+sudo chown -R www-data:www-data /var/www/frame-frontend
 
-# Set environment variables (or hardcode in application-prod.yml)
-export FRAME_DB_PASSWORD=your_db_password
-export FRAME_JWT_SECRET=your_long_random_secret
-export FRAME_REDIS_PASSWORD=your_redis_password
+# Set production secrets in the systemd unit (application-prod.yml is baked into the
+# jar and reads these env vars). Edit BEFORE copying to /etc/systemd/system in Step 6.
+sudo nano /opt/frame/deploy/frame-backend.service
+# Under [Service], replace the placeholder Environment= lines:
+#   Environment=FRAME_DB_PASSWORD=change_me_in_prod   ← must match schema-prod.sql's frame_app password
+#   Environment=FRAME_JWT_SECRET=...                   ← long random string
+#   Environment=FRAME_REDIS_PASSWORD=                  ← your Redis password or blank
+#   Environment=FRAME_CORS_ORIGINS=http://<vm-ip>      ← origin the browser uses
 
 # Install the systemd service
 sudo cp /opt/frame/deploy/frame-backend.service /etc/systemd/system/
@@ -70,9 +77,15 @@ sudo systemctl status frame-backend
 ## Step 6: Configure Nginx
 
 ```bash
+# The rate-limit ZONE must be at nginx http context (not in a server block) —
+# conf.d/*.conf is included at http level by Ubuntu's default nginx.conf:
+sudo cp /opt/frame/deploy/nginx-rate-limit.conf /etc/nginx/conf.d/
+
+# The site (server block + the limit_req that applies the zone):
 sudo cp /opt/frame/deploy/nginx.conf /etc/nginx/sites-available/frame-shop
-sudo ln -s /etc/nginx/sites-available/frame-shop /etc/nginx/sites-enabled/
-sudo nginx -t          # test config
+sudo ln -sf /etc/nginx/sites-available/frame-shop /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t          # test config (must say "OK")
 sudo systemctl reload nginx
 ```
 

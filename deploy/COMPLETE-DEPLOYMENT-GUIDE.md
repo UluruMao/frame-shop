@@ -177,9 +177,12 @@ sudo mariadb -u root -p < /opt/frame/deploy/schema-prod.sql
 **Before running:** edit `schema-prod.sql` to change the `frame_app` password from `change_me_in_prod` to a real password:
 ```bash
 sudo nano /opt/frame/deploy/schema-prod.sql
-# Line: CREATE USER ... IDENTIFIED BY 'change_me_in_prod'
+# Line: CREATE USER IF NOT EXISTS 'frame_app'@'localhost' IDENTIFIED BY 'change_me_in_prod';
 # Change to: IDENTIFIED BY 'your_real_password'
 ```
+Then in Part 4.4, set `FRAME_DB_PASSWORD=your_real_password` in `frame-backend.service` to match — the backend connects as `frame_app`, so these two values MUST be identical.
+
+> ⚠ `CREATE USER IF NOT EXISTS` does NOT change an existing user's password. If you ever need to rotate it later, run `ALTER USER 'frame_app'@'localhost' IDENTIFIED BY 'new_pw';` instead.
 
 ### 3.4 Enable services to auto-start on boot
 
@@ -208,12 +211,20 @@ npm run build
 # → dist/
 ```
 
-### 4.2 Create directories on the server
+### 4.2 Create directories + the `frame` service user on the server
 
 ```bash
 # On the Ubuntu server:
+# Create a dedicated system user for the backend service (matches User=frame in
+# frame-backend.service). --system creates a no-login service account; --create-home
+# gives it a home so systemd has a clean runtime identity.
+sudo useradd --system --create-home --shell /usr/sbin/nologin frame
+
 sudo mkdir -p /opt/frame/deploy /var/lib/frame/uploads /var/www/frame-frontend
-sudo chown -R tcmao:tcmao /opt/frame /var/lib/frame /var/www/frame-frontend
+# Own the app dirs as the frame service user (the jar + uploads must be readable by it)
+sudo chown -R frame:frame /opt/frame /var/lib/frame
+# Frontend is served by Nginx (www-data), so it owns the web root
+sudo chown -R www-data:www-data /var/www/frame-frontend
 ```
 
 ### 4.3 Transfer files (from Windows Git Bash)
@@ -238,23 +249,27 @@ scp "C:/Users/tcmao/Desktop/newRepo/deploy/schema-prod.sql" \
     $SERVER:/opt/frame/deploy/
 ```
 
-### 4.4 Set environment variables
+### 4.4 Set production secrets (env vars)
 
-Edit `application-prod.yml` on the server to set real passwords:
+`application-prod.yml` is **baked into the jar** (at `frame-backend/src/main/resources/application-prod.yml`) — it reads secrets from environment variables with placeholders, so you do NOT edit a file on the server. Instead, set the real values as `Environment=` lines in the systemd unit (the shipped `deploy/frame-backend.service` already has placeholder lines — replace them):
+
 ```bash
-# On the server:
-nano /opt/frame/deploy/application-prod.yml
-# (If you copied it there — or edit it in frame-backend/src/main/resources/ before building)
+# On the server, BEFORE starting the service:
+sudo nano /opt/frame/deploy/frame-backend.service
+# Under [Service], replace the placeholder values:
+#   Environment=FRAME_DB_PASSWORD=change_me_in_prod       ← the password you set in schema-prod.sql
+#   Environment=FRAME_JWT_SECRET=...                     ← a long random string (≥32 chars)
+#   Environment=FRAME_REDIS_PASSWORD=                    ← your Redis password, or blank if none
+#   Environment=FRAME_CORS_ORIGINS=http://192.168.1.105  ← your VM's IP (the origin the browser uses)
 ```
 
-Or set env vars directly in the systemd service:
-```bash
-sudo nano /etc/systemd/system/frame-backend.service
-# Add under [Service]:
-# Environment=FRAME_DB_PASSWORD=your_db_password
-# Environment=FRAME_JWT_SECRET=your_long_random_secret
-# Environment=FRAME_REDIS_PASSWORD=
-```
+**Important:** the `FRAME_DB_PASSWORD` here MUST match the password you set for `frame_app` in `schema-prod.sql` (Part 3.3). If they differ, the backend can't connect to MariaDB.
+
+The four `frame_app` / `frame` / uploads / Nginx moving parts:
+- `schema-prod.sql` creates DB user `frame_app@localhost` with a password → backend connects as `frame_app` (NOT root).
+- `frame-backend.service` runs the jar as the Linux user `frame` → jar + `/var/lib/frame/uploads` must be owned by `frame`.
+- `nginx.conf` serves `/var/www/frame-frontend` (owned by `www-data`) + proxies `/api/` → `127.0.0.1:8081`.
+- `nginx-rate-limit.conf` declares the rate-limit zone at `http` context (see Part 6).
 
 ---
 
@@ -303,12 +318,20 @@ Common issues:
 ### 6.1 Install the Nginx config
 
 ```bash
+# The rate-limit ZONE must live at nginx `http` context, not in a site's `server`
+# block (nginx -t rejects `limit_req_zone` there). Ubuntu's default nginx.conf
+# includes conf.d/*.conf at the http level, so this snippet is picked up automatically:
+sudo cp /opt/frame/deploy/nginx-rate-limit.conf /etc/nginx/conf.d/
+
+# The site config (server block + the `limit_req` that applies the zone):
 sudo cp /opt/frame/deploy/nginx.conf /etc/nginx/sites-available/frame-shop
 sudo ln -sf /etc/nginx/sites-available/frame-shop /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default   # remove the default site
 sudo nginx -t                                 # test config (should say "OK")
 sudo systemctl reload nginx
 ```
+
+If `nginx -t` reports `unknown "checkout" zone` → you forgot the `conf.d/` copy above. If it reports `"limit_req_zone" directive is not allowed here` → a zone declaration leaked into a `server` block.
 
 ### 6.2 Verify
 
