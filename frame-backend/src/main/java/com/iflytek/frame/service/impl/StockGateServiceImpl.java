@@ -1,6 +1,6 @@
 package com.iflytek.frame.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.exception.BusinessException;
@@ -93,8 +93,16 @@ public class StockGateServiceImpl implements StockGateService {
      */
     @Scheduled(fixedRate = 10_000)
     public void openDueFlashSales() {
-        LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Product::isFlashSale, true).le(Product::getFlashSaleAt, LocalDateTime.now());
+        // NOTE: plain QueryWrapper (not LambdaQueryWrapper) by design. The entity field is
+        // `boolean isFlashSale`; a LambdaQueryWrapper would reference Product::isFlashSale,
+        // but MyBatis-Plus's lambda resolver strips the `is` prefix from a boolean getter,
+        // looks up property `flashSale` in the lambda cache, and MISSES (the field/column is
+        // isFlashSale/is_flash_sale) → MybatisPlusException, swallowed by the catch below,
+        // silently no-opping the scheduler (flash sales never auto-open). Column-string
+        // form has no property-name resolution step, so it can't hit that ambiguity.
+        // Regression test: FlashSaleSchedulerIntegrationTest (real MariaDB, not mocked mapper).
+        QueryWrapper<Product> wrapper = new QueryWrapper<>();
+        wrapper.eq("is_flash_sale", true).le("flash_sale_at", LocalDateTime.now());
         List<Product> due;
         try {
             due = productMapper.selectList(wrapper);
