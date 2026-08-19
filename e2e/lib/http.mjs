@@ -43,7 +43,7 @@ async function request(method, path, payload, { token } = {}) {
 
 export const http = {
   get:  (path, opts) => request('GET',    path, undefined, opts),
-  post: (path, body) => request('POST',   path, body),
-  put:  (path, body) => request('PUT',    path, body),
+  post: (path, body, opts) => request('POST',   path, body, opts),
+  put:  (path, body, opts) => request('PUT',    path, body, opts),
   del:  (path, opts) => request('DELETE', path, undefined, opts),
 }
