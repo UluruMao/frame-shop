@@ -63,4 +63,46 @@ public class UserServiceImpl implements UserService, UserDetailsService {
                 .authorities(List.of(new SimpleGrantedAuthority(authority)))
                 .build();
     }
+
+    @Override
+    public User findByPhone(String phone) {
+        return userMapper.selectOne(
+                new LambdaQueryWrapper<User>().eq(User::getPhone, phone));
+    }
+
+    @Override
+    public void updateStatus(Long userId, String status, int failedAttempts) {
+        User u = new User();
+        u.setId(userId);
+        u.setStatus(status);
+        u.setFailedAttempts(failedAttempts);
+        userMapper.updateById(u);
+    }
+
+    @Override
+    public void clearFailedAttempts(Long userId) {
+        updateStatus(userId, "ACTIVE", 0);
+    }
+
+    @Override
+    public void updatePasswordByPhone(String phone, String newPasswordHash) {
+        User u = findByPhone(phone);
+        if (u == null) {
+            throw new BusinessException(ResultCode.USER_NOT_FOUND, "user not found for phone");
+        }
+        User upd = new User();
+        upd.setId(u.getId());
+        upd.setPasswordHash(newPasswordHash);
+        upd.setStatus("ACTIVE");
+        upd.setFailedAttempts(0);
+        userMapper.updateById(upd);
+    }
+
+    @Override
+    public void updatePhone(Long userId, String newPhone) {
+        User upd = new User();
+        upd.setId(userId);
+        upd.setPhone(newPhone);
+        userMapper.updateById(upd);
+    }
 }
