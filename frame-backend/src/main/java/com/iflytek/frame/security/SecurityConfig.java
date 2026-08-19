@@ -83,7 +83,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/auth/login",
-                                "/auth/register"
+                                "/auth/register",
+                                "/auth/sms/send",
+                                "/auth/password/forgot",
+                                "/captcha"
                         ).permitAll()
                         // Swagger / OpenAPI
                         .requestMatchers(
@@ -107,6 +110,9 @@ public class SecurityConfig {
                                 "/products/{id}").hasRole("ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.DELETE,
                                 "/products/{id}").hasRole("ADMIN")
+                        // admin-only operation-log audit trail
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/admin/operation-logs").hasRole("ADMIN")
                         // everything else requires authentication
                         .anyRequest().authenticated())
                 .exceptionHandling(eh -> eh

@@ -13,6 +13,36 @@ export interface LoginRequest {
   password: string
 }
 
+export interface UserProfile {
+  id: number
+  username: string
+  phone: string | null
+  nickname: string | null
+  avatarUrl: string | null
+  signature: string | null
+  role: string
+}
+
+export interface RegisterRequest {
+  username: string
+  password: string
+  phone: string
+  code: string
+  agreed: boolean
+}
+
+export interface SendCodeRequest {
+  phone: string
+  purpose: 'REGISTER' | 'FORGOT_PASSWORD' | 'REBIND_OLD' | 'REBIND_NEW' | 'LOCKOUT_RESET'
+  captchaId: string
+  captchaAnswer: string
+}
+
+export interface CaptchaResponse {
+  captchaId: string
+  svgImage: string
+}
+
 /**
  * Backend {@code LoginResponse}. The {@code role} field ("USER"|"ADMIN") is
  * present on the backend DTO; admins see the Admin page + product mutations.

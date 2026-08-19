@@ -30,7 +30,7 @@ import static org.awaitility.Awaitility.await;
  *   <li>Checkout 1 unit of a flash-sale product → {@code checkoutService.checkout}
  *       Lua-gates stock, XADDs to {@code orders:pending}, sets
  *       {@code order_status:{corrId}="queued"}, returns 202.</li>
- *   <li>The {@code @Scheduled} consumer drains the stream within ~500ms, durably persists
+ *   <li>The {@code @Scheduled} consumer drains the stream within ~100ms, durably persists
  *       the Order (DB auto-gen PK), decrements DB stock, and sets
  *       {@code order_status:{corrId}="pending"} + {@code order_id_map:{corrId}=<dbPk>}.</li>
  *   <li>Poll until the queued→pending transition lands (this is the proof the consumer ran).</li>
@@ -61,8 +61,17 @@ class CheckoutFlowIntegrationTest {
 
     @Test
     void checkout_endToEnd_queuedToPendingToPaid() {
-        // 1. register a user
-        User user = userService.register(new RegisterRequest("itest_" + UUID.randomUUID(), "pass1234"));
+        // 1. register a user (UC001 SMS-gated: pre-seed the code in Redis so the dev
+        //    LoggingVerificationProvider verifyAndConsume succeeds; password must satisfy
+        //    the ≥8 / ≥2-category rule; username must be 4-25 alphanumeric — no underscores,
+        //    and must not contain a banned word like "test"/"admin"/"root").
+        String phone = "139" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String code = "123456";
+        redis.opsForValue().set("sms:code:REGISTER:" + phone, code,
+                java.time.Duration.ofSeconds(300));
+        User user = userService.register(
+                new RegisterRequest("buyer" + UUID.randomUUID().toString().replace("-", "").substring(0, 12),
+                        "Pass1234!", phone, code, true));
 
         // 2. a flash-sale product with stock 1
         Product p = new Product();
@@ -87,11 +96,14 @@ class CheckoutFlowIntegrationTest {
 
         assertThat(resp.getStatus()).isEqualTo("queued");
         assertThat(resp.getOrderId()).isNotNull();
-        // hot path sets order_status:{corrId} = "queued" in Redis
-        assertThat(redis.opsForValue().get("order_status:" + resp.getOrderId())).isEqualTo("queued");
+        // hot path sets order_status:{corrId} = "queued" in Redis. The consumer drains
+        // every 100ms, so by the time we read, the order may already be "pending" —
+        // accept either (both prove the order entered the pipeline).
+        assertThat(redis.opsForValue().get("order_status:" + resp.getOrderId()))
+                .isIn("queued", "pending");
 
         // 4. poll until the consumer transitions queued→pending (durable write committed).
-        //    The consumer's @Scheduled drain() runs every 500ms.
+        //    The consumer's @Scheduled drain() runs every 100ms.
         Long corrId = resp.getOrderId();
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() ->
                 assertThat(redis.opsForValue().get("order_status:" + corrId)).isEqualTo("pending"));

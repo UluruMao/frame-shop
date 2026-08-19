@@ -6,6 +6,15 @@ server:
       charset: UTF-8
       enabled: true
       force: true
+  # --- Dev HTTPS (self-signed) — OFF by default so build/tests/e2e/dev keep working over HTTP.
+  #     To test HTTPS locally: set ssl.enabled=true and ensure dev-keystore.p12 is on the
+  #     classpath (generated via keytool, see SECURITY-NOTES.md). Prod terminates TLS at Nginx. ---
+  ssl:
+    enabled: false
+    key-store: classpath:dev-keystore.p12
+    key-store-password: frame-dev
+    key-store-type: PKCS12
+    key-alias: frame-dev
 
 spring:
   application:
@@ -83,6 +92,14 @@ frame:
     dir: ./uploads        # configurable; NOT a Windows-absolute path (Linux-deploy-friendly)
   rate-limit:
     checkout-per-minute: 10
+  sms:
+    provider: logging          # logging | aliyun   (logging = dev stub; aliyun = 短信认证服务)
+    cooldown-seconds: 60       # dev-stub cooldown only; prod relies on Aliyun's 防盗刷
+    aliyun:
+      access-key-id: ""        # set via env FRAME_SMS_AK_ID (Aliyun RAM user for 短信认证服务)
+      access-key-secret: ""    # set via env FRAME_SMS_AK_SECRET
+      region: cn-hangzhou
+      service-code: ""         # 短信认证服务 service code (from the Aliyun console), if the API needs one
 
 # --- SpringDoc OpenAPI (Swagger UI) ---
 springdoc:

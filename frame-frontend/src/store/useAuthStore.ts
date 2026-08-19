@@ -5,6 +5,7 @@ interface AuthUser {
   userId: number
   username: string
   role: string
+  phone?: string | null
 }
 
 interface AuthState {

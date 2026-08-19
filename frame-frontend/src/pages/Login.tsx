@@ -44,7 +44,7 @@ export default function Login() {
 
         <div className="space-y-1.5">
           <label className="block text-sm text-slate-600" htmlFor="username">
-            Username
+            Username or phone
           </label>
           <input
             id="username"
@@ -69,7 +69,19 @@ export default function Login() {
           />
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <div className="space-y-1">
+            <p className="text-sm text-red-600">{error}</p>
+            {/lock/i.test(error) && (
+              <p className="text-xs text-slate-500">
+                Account locked?{' '}
+                <Link to="/forgot-password" className="text-brand-600 hover:underline">
+                  Reset your password
+                </Link>
+              </p>
+            )}
+          </div>
+        )}
 
         <button
           type="submit"
@@ -83,6 +95,10 @@ export default function Login() {
           Demo credentials: admin / admin123
         </p>
         <p className="text-xs text-slate-500 text-center">
+          <Link to="/forgot-password" className="text-brand-600 hover:underline">
+            Forgot password?
+          </Link>
+          {' · '}
           No account?{' '}
           <Link to="/register" className="text-brand-600 hover:underline">
             Register

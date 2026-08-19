@@ -6,7 +6,6 @@ import com.iflytek.frame.entity.User;
 import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.mapper.ProductMapper;
 import com.iflytek.frame.service.*;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,16 +39,6 @@ import static org.awaitility.Awaitility.await;
  *   <li>Stock drift → final DB or Redis stock ≠ 0 (consumer double-decremented, or
  *       re-credited a claimed unit, or orders lost in the consumer).</li>
  * </ul>
- *
- * <p><b>KNOWN FAILURE (production-code bug revealed by this test):</b> The checkout hot path
- * ({@code CheckoutServiceImpl}) generates the order correlation id as
- * {@code System.currentTimeMillis()}. Under 50-thread concurrency, multiple buyers collide
- * on the same millis orderId. This triggers a Spring Data Redis {@code MapRecord}
- * deserialization issue where the consumer reads the WRONG payload for a given stream
- * record — 5 distinct buyers' messages collapse into ~2 distinct persisted orders, and
- * DB-backstop stock decrements fall short (stock ends at 2-3, not 0). The Lua gate itself
- * is correct (ok202=5, conflict409=45, Redis stock=0), but the consumer loses orders. This
- * is a real production-code defect in the Task 5 orderId strategy, not a test bug.
  */
 @SpringBootTest
 @TestPropertySource(properties = {
@@ -83,14 +72,32 @@ class LoadMutexTest {
         AtomicInteger ok202 = new AtomicInteger();
         AtomicInteger conflict409 = new AtomicInteger();
 
+        // Pre-seed all UC001 SMS codes BEFORE the concurrent storm so 1000 Redis SETs
+        // don't contend with the register+checkout hot path (HikariCP pool=50, 1000 threads).
+        // Phones are run-unique (runPrefix) so leftover DB users from prior runs don't trip
+        // the new register phone-dup check (Task 7 UC001) — the DB persists across @SpringBootTest runs.
+        String code = "123456";
+        String runPrefix = UUID.randomUUID().toString().replace("-", "").substring(0, 6);
+        for (int i = 0; i < M; i++) {
+            String phone = "13" + runPrefix + String.format("%04d", i);
+            redis.opsForValue().set("sms:code:REGISTER:" + phone, code,
+                    java.time.Duration.ofSeconds(300));
+        }
+
         List<Runnable> tasks = new java.util.ArrayList<>();
         for (int i = 0; i < M; i++) {
             final int idx = i;
             tasks.add(() -> {
                 try {
                     start.await();
+                    // UC001 SMS-gated register: each buyer gets a unique phone + a Redis-
+                    // pre-seeded code (seeded above) so the dev LoggingVerificationProvider verifies.
+                    // Username must be 4-25 alphanumeric (no underscores).
+                    String phone = "13" + runPrefix + String.format("%04d", idx);
                     User u = userService.register(
-                            new RegisterRequest("lb_" + idx + "_" + UUID.randomUUID(), "pass1234"));
+                            new RegisterRequest("lb" + idx + UUID.randomUUID().toString().replace("-", "").substring(0, 12),
+                                    "Pass1234!",
+                                    phone, code, true));
                     CheckoutRequest req = new CheckoutRequest();
                     OrderItemDTO item = new OrderItemDTO();
                     item.setProductId(p.getId());
@@ -106,8 +113,9 @@ class LoadMutexTest {
                     } catch (BusinessException be) {
                         if (be.getCode() == 409) conflict409.incrementAndGet();
                     }
-                } catch (Exception ignored) {
-                    // unexpected thread-level failure — the assertions below will catch a shortfall
+                } catch (Exception e) {
+                    // Log so a future failure (e.g. register/checkout throwing) is visible, not silently swallowed.
+                    System.err.println("[LoadMutexTest] thread " + idx + " failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
                 }
             });
         }
@@ -117,8 +125,10 @@ class LoadMutexTest {
         pool.awaitTermination(30, TimeUnit.SECONDS);
 
         // wait for the consumer to drain the K claimed orders (queued→pending).
-        // The consumer's @Scheduled drain() runs every 500ms; K=500 orders to process.
-        await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+        // The consumer's @Scheduled drain() runs every 100ms; K=500 orders to process.
+        // 60s window: the UC001 register storm (2 SELECTs + verifyAndConsume per user) adds
+        // DB/Redis load vs. the pre-Task-7 2-arg register, so the drain needs more room.
+        await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
             Product current = productMapper.selectById(p.getId());
             assertThat(current.getStock()).isLessThanOrEqualTo(0);
         });
