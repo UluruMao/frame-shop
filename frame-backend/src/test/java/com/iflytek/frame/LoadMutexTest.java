@@ -113,8 +113,9 @@ class LoadMutexTest {
                     } catch (BusinessException be) {
                         if (be.getCode() == 409) conflict409.incrementAndGet();
                     }
-                } catch (Exception ignored) {
-                    // unexpected thread-level failure — the assertions below will catch a shortfall
+                } catch (Exception e) {
+                    // Log so a future failure (e.g. register/checkout throwing) is visible, not silently swallowed.
+                    System.err.println("[LoadMutexTest] thread " + idx + " failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
                 }
             });
         }

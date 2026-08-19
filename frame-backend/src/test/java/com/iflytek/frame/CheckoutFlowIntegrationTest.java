@@ -30,7 +30,7 @@ import static org.awaitility.Awaitility.await;
  *   <li>Checkout 1 unit of a flash-sale product → {@code checkoutService.checkout}
  *       Lua-gates stock, XADDs to {@code orders:pending}, sets
  *       {@code order_status:{corrId}="queued"}, returns 202.</li>
- *   <li>The {@code @Scheduled} consumer drains the stream within ~500ms, durably persists
+ *   <li>The {@code @Scheduled} consumer drains the stream within ~100ms, durably persists
  *       the Order (DB auto-gen PK), decrements DB stock, and sets
  *       {@code order_status:{corrId}="pending"} + {@code order_id_map:{corrId}=<dbPk>}.</li>
  *   <li>Poll until the queued→pending transition lands (this is the proof the consumer ran).</li>
