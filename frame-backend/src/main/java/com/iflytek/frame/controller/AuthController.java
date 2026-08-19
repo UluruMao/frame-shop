@@ -5,6 +5,7 @@ import com.iflytek.frame.dto.LoginRequest;
 import com.iflytek.frame.dto.LoginResponse;
 import com.iflytek.frame.security.SecurityUser;
 import com.iflytek.frame.service.AuthService;
+import com.iflytek.frame.service.PasswordService;
 import com.iflytek.frame.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordService passwordService;
 
     @Operation(summary = "Login", description = "Validates credentials and returns a JWT. "
             + "Demo credentials: admin / admin123")
@@ -39,5 +41,20 @@ public class AuthController {
     @GetMapping("/me")
     public Result<SecurityUser> me() {
         return Result.success(SecurityUtils.currentUser());
+    }
+
+    @Operation(summary = "Forgot password — reset via SMS code")
+    @PostMapping("/password/forgot")
+    public Result<Void> forgot(@Valid @RequestBody com.iflytek.frame.dto.ForgotPasswordRequest req) {
+        passwordService.resetByPhone(req.getPhone(), req.getCode(), req.getNewPassword());
+        return Result.success();
+    }
+
+    @Operation(summary = "Change password (logged in)")
+    @PostMapping("/password/change")
+    public Result<Void> changePassword(@Valid @RequestBody com.iflytek.frame.dto.ChangePasswordRequest req) {
+        passwordService.changePassword(com.iflytek.frame.util.SecurityUtils.currentUserId(),
+                req.getOldPassword(), req.getNewPassword());
+        return Result.success();
     }
 }
