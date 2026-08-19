@@ -38,6 +38,15 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- AOP: @Aspect / @Around for the operation-log aspect (NFR op-log).
+             Brings spring-aop + aspectjweaver; not transitive from starter-web.
+             In Spring Boot 4.x the starter is named spring-boot-starter-aspectj
+             (the old spring-boot-starter-aop name was removed). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
+        </dependency>
+
         <!-- Security: stateless JWT auth via a custom filter in the SecurityFilterChain -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
