@@ -18,4 +18,16 @@ public class User extends BaseEntity {
     private String passwordHash;
     @Schema(description = "Role: USER or ADMIN")
     private Role role;
+    @Schema(description = "Phone number (SMS verification target)")
+    private String phone;
+    @Schema(description = "Display nickname (defaults to username if null)")
+    private String nickname;
+    @Schema(description = "Avatar image URL")
+    private String avatarUrl;
+    @Schema(description = "Personal signature")
+    private String signature;
+    @Schema(description = "Account status: ACTIVE or LOCKED")
+    private String status;
+    @Schema(description = "Consecutive failed login attempts (resets on success)")
+    private Integer failedAttempts;
 }

@@ -10,14 +10,37 @@ DROP TABLE IF EXISTS `product`;
 DROP TABLE IF EXISTS `user`;
 
 CREATE TABLE `user` (
-    `id`            BIGINT       NOT NULL AUTO_INCREMENT,
-    `username`      VARCHAR(64)  NOT NULL,
-    `password_hash` VARCHAR(100) NOT NULL,
-    `role`          VARCHAR(16)  NOT NULL DEFAULT 'USER',
-    `create_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `update_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `id`              BIGINT       NOT NULL AUTO_INCREMENT,
+    `username`        VARCHAR(64)  NOT NULL,
+    `password_hash`   VARCHAR(100) NOT NULL,
+    `role`            VARCHAR(16)  NOT NULL DEFAULT 'USER',
+    `phone`           VARCHAR(20)  DEFAULT NULL,
+    `nickname`        VARCHAR(64)  DEFAULT NULL,
+    `avatar_url`      VARCHAR(512) DEFAULT NULL,
+    `signature`       VARCHAR(256) DEFAULT NULL,
+    `status`          VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    `failed_attempts` INT          NOT NULL DEFAULT 0,
+    `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_user_username` (`username`)
+    UNIQUE KEY `uk_user_username` (`username`),
+    UNIQUE KEY `uk_user_phone` (`phone`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `operation_log` (
+    `id`            BIGINT       NOT NULL AUTO_INCREMENT,
+    `user_id`       BIGINT       DEFAULT NULL,
+    `username`      VARCHAR(64) DEFAULT NULL,
+    `method`        VARCHAR(10)  NOT NULL,
+    `uri`           VARCHAR(256) NOT NULL,
+    `params`        TEXT,
+    `result_status` VARCHAR(16) NOT NULL,
+    `cost_ms`       INT          NOT NULL DEFAULT 0,
+    `ip`            VARCHAR(64) DEFAULT NULL,
+    `create_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_oplog_user` (`user_id`),
+    KEY `idx_oplog_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `product` (
@@ -68,8 +91,8 @@ CREATE TABLE `order_item` (
     KEY `idx_order_item_product` (`product_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `user` (`username`, `password_hash`, `role`) VALUES
-    ('admin', '$2a$10$7FzLk9ItV8zh8fPkg9WJKuTOy.cxJ61NXxGVmYaSAGg9RlBxYYfKC', 'ADMIN');
+INSERT INTO `user` (`username`, `password_hash`, `role`, `phone`) VALUES
+    ('admin', '$2a$10$7FzLk9ItV8zh8fPkg9WJKuTOy.cxJ61NXxGVmYaSAGg9RlBxYYfKC', 'ADMIN', '13800000000');
 
 INSERT INTO `product` (`name`, `price_in_cents`, `stock`, `category`, `is_flash_sale`, `description`) VALUES
     ('Flash Widget', 1999, 5, 'widgets', 1, 'Limited flash-sale item'),
