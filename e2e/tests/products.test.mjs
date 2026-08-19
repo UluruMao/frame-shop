@@ -16,7 +16,10 @@ export const suite = {
     {
       name: 'list products (no auth) → contains seeds',
       run: async () => {
-        const res = await http.get('/products')
+        // Request a large page size so accumulated test products from prior runs
+        // (which may be many) don't push the seeded Flash Widget / Demo Gadget off
+        // the default 10-row first page. The API caps size at 200.
+        const res = await http.get('/products?size=100')
         assert(res.status === 200, `expected 200, got ${res.status}`)
         // GET /products returns a MyBatis-Plus pagination envelope: {data:{records:[...]}}.
         // The product array lives under data.records (not data itself).
