@@ -18,7 +18,10 @@ export const suite = {
       run: async () => {
         const res = await http.get('/products')
         assert(res.status === 200, `expected 200, got ${res.status}`)
-        const names = (res.body.data || res.body).map(p => p.name)
+        // GET /products returns a MyBatis-Plus pagination envelope: {data:{records:[...]}}.
+        // The product array lives under data.records (not data itself).
+        const records = res.body.data.records || res.body.data || res.body
+        const names = records.map(p => p.name)
         assert(names.includes('Flash Widget'), 'expected Flash Widget in list')
         assert(names.includes('Demo Gadget'), 'expected Demo Gadget in list')
       },
@@ -80,8 +83,8 @@ export const suite = {
       },
     },
     {
-      name: 'admin edits a FLASH-SALE product with flashSaleAt → documented bug: 500',
-      knownIssue: 'frontend sends flashSaleAt as ISO (2026-08-19T15:30); backend Jackson expects yyyy-MM-dd HH:mm:ss → deserialization fails → 500. Flip to expect 200 when fixed.',
+      name: 'admin edits a FLASH-SALE product with flashSaleAt → 200',
+      knownIssue: "The original 500 (cache ObjectMapper missing java.time) is FIXED — PUT now returns 200 and flashSaleAt persists. REMAINING quirk (separate, deferred): the request sends isFlashSale but the boolean field serializes/deserializes as the JSON key 'flashSale' (Jackson boolean is-prefix), so isFlashSale=true in the request is silently ignored → the flashSale flag may not flip via this key. The 200 + flashSaleAt persisting is the current correct behavior.",
       run: async (ctx) => {
         // Use the seeded Flash Widget (id=1, is_flash_sale=1).
         const res = await http.put('/products/1', {
@@ -91,8 +94,9 @@ export const suite = {
           isFlashSale: true,
           flashSaleAt: '2026-08-19T15:30',
         }, { token: ctx.adminToken })
-        // CURRENT (buggy) behavior: 500. When fixed, assert === 200 here.
-        assert(res.status === 500, `expected 500 (documented bug), got ${res.status}`)
+        assert(res.status === 200, `expected 200, got ${res.status}`)
+        // flashSaleAt should persist (ISO parsed fine by Jackson 3).
+        assert(!!res.body.data.flashSaleAt, 'expected flashSaleAt to be set in the response')
       },
     },
     {
