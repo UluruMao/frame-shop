@@ -3,7 +3,6 @@ package com.iflytek.frame.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iflytek.frame.common.PageResult;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.ProductDTO;
@@ -22,6 +21,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,7 +37,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductMapper mapper;
     private final StringRedisTemplate redis;
     private final StockGateService stockGateService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Value("${frame.upload.dir:./uploads}")
     private String uploadDir;
