@@ -7,7 +7,6 @@ import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.entity.User;
 import com.iflytek.frame.mapper.ProductMapper;
 import com.iflytek.frame.service.*;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -60,12 +59,6 @@ class CheckoutFlowIntegrationTest {
     @Autowired UserService userService;
     @Autowired StringRedisTemplate redis;
 
-    @Disabled("Pre-existing flake (consumer-drain timing): the @Scheduled consumer drains the "
-            + "orders:pending List every 500ms; the 10s await window for the queued→pending "
-            + "transition occasionally expires before the durable write lands (line ~100). "
-            + "Not a Task 7 regression — the register setup was updated only for the UC001 "
-            + "SMS-gated 5-arg RegisterRequest; the consumer path is untouched. Re-enable once "
-            + "the consumer drain is made deterministic (shorter poll interval or sync drain in tests).")
     @Test
     void checkout_endToEnd_queuedToPendingToPaid() {
         // 1. register a user (UC001 SMS-gated: pre-seed the code in Redis so the dev
@@ -103,11 +96,14 @@ class CheckoutFlowIntegrationTest {
 
         assertThat(resp.getStatus()).isEqualTo("queued");
         assertThat(resp.getOrderId()).isNotNull();
-        // hot path sets order_status:{corrId} = "queued" in Redis
-        assertThat(redis.opsForValue().get("order_status:" + resp.getOrderId())).isEqualTo("queued");
+        // hot path sets order_status:{corrId} = "queued" in Redis. The consumer drains
+        // every 100ms, so by the time we read, the order may already be "pending" —
+        // accept either (both prove the order entered the pipeline).
+        assertThat(redis.opsForValue().get("order_status:" + resp.getOrderId()))
+                .isIn("queued", "pending");
 
         // 4. poll until the consumer transitions queued→pending (durable write committed).
-        //    The consumer's @Scheduled drain() runs every 500ms.
+        //    The consumer's @Scheduled drain() runs every 100ms.
         Long corrId = resp.getOrderId();
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() ->
                 assertThat(redis.opsForValue().get("order_status:" + corrId)).isEqualTo("pending"));
