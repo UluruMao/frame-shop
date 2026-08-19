@@ -39,6 +39,7 @@ CREATE TABLE `operation_log` (
     `cost_ms`       INT          NOT NULL DEFAULT 0,
     `ip`            VARCHAR(64) DEFAULT NULL,
     `create_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_oplog_user` (`user_id`),
     KEY `idx_oplog_time` (`create_time`)
