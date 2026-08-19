@@ -42,6 +42,8 @@ coverage/
 
 # ===== Backend (Maven / Java) =====
 frame-backend/target/
+# Dev-only self-signed TLS keystore (generated locally; never commit)
+frame-backend/src/main/resources/dev-keystore.p12
 *.class
 *.jar
 *.war

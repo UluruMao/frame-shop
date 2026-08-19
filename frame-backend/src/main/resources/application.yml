@@ -6,6 +6,15 @@ server:
       charset: UTF-8
       enabled: true
       force: true
+  # --- Dev HTTPS (self-signed) — OFF by default so build/tests/e2e/dev keep working over HTTP.
+  #     To test HTTPS locally: set ssl.enabled=true and ensure dev-keystore.p12 is on the
+  #     classpath (generated via keytool, see SECURITY-NOTES.md). Prod terminates TLS at Nginx. ---
+  ssl:
+    enabled: false
+    key-store: classpath:dev-keystore.p12
+    key-store-password: frame-dev
+    key-store-type: PKCS12
+    key-alias: frame-dev
 
 spring:
   application:
