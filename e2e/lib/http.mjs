@@ -10,11 +10,16 @@ function truncate(s, max = 2000) {
   return str.length > max ? str.slice(0, max) + `…(${str.length} bytes)` : str
 }
 
-async function request(method, path, { body, token } = {}) {
+// request(method, path, payload, { token })
+//   - POST/PUT: payload is the request body (sent as JSON). Token optional via 4th arg.
+//   - GET/DELETE: payload omitted; { token } is the options bag.
+// This matches the design spec's call shape: http.post(path, body) / http.get(path, { token }).
+async function request(method, path, payload, { token } = {}) {
   const url = `${env.BASE_URL}${path}`
   const headers = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
   const opts = { method, headers, signal: AbortSignal.timeout(env.TIMEOUT_MS) }
+  const body = payload
   if (body !== undefined) opts.body = JSON.stringify(body)
 
   const started = Date.now()
@@ -37,8 +42,8 @@ async function request(method, path, { body, token } = {}) {
 }
 
 export const http = {
-  get:  (path, opts) => request('GET',    path, opts),
-  post: (path, opts) => request('POST',   path, opts),
-  put:  (path, opts) => request('PUT',    path, opts),
-  del:  (path, opts) => request('DELETE', path, opts),
+  get:  (path, opts) => request('GET',    path, undefined, opts),
+  post: (path, body) => request('POST',   path, body),
+  put:  (path, body) => request('PUT',    path, body),
+  del:  (path, opts) => request('DELETE', path, undefined, opts),
 }

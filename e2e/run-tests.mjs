@@ -1,6 +1,7 @@
 import { env } from './lib/env.mjs'
 import { setLog, http } from './lib/http.mjs'
 import { writeResults } from './lib/reporter.mjs'
+import { suite as authSuite } from './tests/auth.test.mjs'
 
 // Pre-flight: is the live system reachable?
 async function preflight() {
@@ -36,7 +37,7 @@ async function main() {
   console.log(`✓ System reachable at ${env.BASE_URL}\n`)
 
   // testFiles: array of { name, tests } — populated as tasks add files.
-  const testFiles = []
+  const testFiles = [authSuite]
   const runLog = []
   setLog((line) => runLog.push(line))
 
