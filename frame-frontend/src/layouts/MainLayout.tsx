@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Package, LogOut, Boxes, ShoppingCart, ClipboardList, Shield } from 'lucide-react'
+import { LayoutDashboard, Package, LogOut, Boxes, ShoppingCart, ClipboardList, Shield, User } from 'lucide-react'
 import { useAuthStore, useIsAdmin } from '@/store/useAuthStore'
 
 const navItems = [
@@ -7,6 +7,7 @@ const navItems = [
   { to: '/products', label: 'Products', icon: Package },
   { to: '/checkout', label: 'Checkout', icon: ShoppingCart },
   { to: '/orders', label: 'Orders', icon: ClipboardList },
+  { to: '/profile', label: 'Profile', icon: User },
 ]
 
 export default function MainLayout() {
