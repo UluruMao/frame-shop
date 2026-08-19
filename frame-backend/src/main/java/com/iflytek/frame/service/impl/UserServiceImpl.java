@@ -54,7 +54,7 @@ public class UserServiceImpl implements UserService, UserDetailsService {
             throw new BusinessException(ResultCode.PARAM_INVALID,
                     "password must be ≥8 chars with ≥2 of {upper, lower, special}");
         }
-        if (containsBannedWord(request.getUsername())) {
+        if (containsBannedWordStatic(request.getUsername())) {
             throw new BusinessException(ResultCode.PARAM_INVALID, "username contains a banned word");
         }
         if (findByPhone(request.getPhone()) != null) {
@@ -144,10 +144,27 @@ public class UserServiceImpl implements UserService, UserDetailsService {
         userMapper.updateById(upd);
     }
 
-    private boolean containsBannedWord(String text) {
+    @Override
+    public void updateProfileFields(Long userId, String nickname, String signature) {
+        User u = new User();
+        u.setId(userId);
+        u.setNickname(nickname);
+        u.setSignature(signature);
+        userMapper.updateById(u);
+    }
+
+    @Override
+    public void updateAvatar(Long userId, String avatarUrl) {
+        User u = new User();
+        u.setId(userId);
+        u.setAvatarUrl(avatarUrl);
+        userMapper.updateById(u);
+    }
+
+    static boolean containsBannedWordStatic(String text) {
         // Light banned-word filter loaded from classpath:banned-words.txt (one word per line).
         // Missing file → no filtering (fail open). Keep this simple — not a security boundary.
-        try (var in = getClass().getResourceAsStream("/banned-words.txt")) {
+        try (var in = UserServiceImpl.class.getResourceAsStream("/banned-words.txt")) {
             if (in == null) return false;
             String lower = text.toLowerCase();
             return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)

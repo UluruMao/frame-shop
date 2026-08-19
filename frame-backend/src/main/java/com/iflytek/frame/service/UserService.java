@@ -23,4 +23,10 @@ public interface UserService {
 
     /** Update phone (rebind confirm). */
     void updatePhone(Long userId, String newPhone);
+
+    /** Update nickname + signature (UC016 profile edit). */
+    void updateProfileFields(Long userId, String nickname, String signature);
+
+    /** Update avatar URL (UC016 avatar upload). */
+    void updateAvatar(Long userId, String avatarUrl);
 }
