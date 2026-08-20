@@ -7,6 +7,7 @@ import com.iflytek.frame.dto.ProductListItem;
 import com.iflytek.frame.entity.Order;
 import com.iflytek.frame.entity.OrderItem;
 import com.iflytek.frame.entity.Product;
+import com.iflytek.frame.entity.Review;
 import com.iflytek.frame.common.OrderStatus;
 import com.iflytek.frame.util.PageQuery;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProductMapperIntegrationTest {
 
     @Autowired ProductMapper productMapper;
+    @Autowired ReviewMapper reviewMapper;
     @Autowired JdbcTemplate jdbc;
 
     private void seedCatalog() {
@@ -120,6 +122,47 @@ class ProductMapperIntegrationTest {
         assertThat(r.get(0).getName()).isEqualTo("Red Widget");
         assertThat(r.get(0).getAvgRating()).isEqualTo(4.0);
         assertThat(r.get(1).getAvgRating()).isEqualTo(0.0);
+    }
+
+    @Test
+    void ratingSort_reflectsNewReview() {
+        seedCatalog();
+        // seed a fresh product (auto-increment id, won't collide with seeded 1/2/3)
+        Product p = new Product();
+        p.setName("RatingSortTest-" + System.nanoTime());
+        p.setPriceInCents(500);
+        p.setStock(3);
+        p.setCategory("test");
+        productMapper.insert(p);
+
+        // before any review: avgRating 0.0 (no review rows for this product → COALESCE to 0)
+        double beforeAvg = productMapper.pageProducts(new Page<>(1, 50),
+                q("rating", " DESC", null, null)).getRecords().stream()
+                .filter(x -> x.getId().equals(p.getId()))
+                .findFirst().map(ProductListItem::getAvgRating).orElse(-1.0);
+        assertThat(beforeAvg).isEqualTo(0.0);
+
+        // insert a 5/5/5 review → AVG((5+5+5)/3.0) = 5.0
+        // order_id/user_id are synthetic (-1); the review table has no FK constraints,
+        // and uk_review_order_product (order_id,product_id) is unique on the new product_id.
+        Review r = new Review();
+        r.setOrderId(-1L);
+        r.setUserId(-1L);
+        r.setProductId(p.getId());
+        r.setQualityStars(5);
+        r.setLogisticsStars(5);
+        r.setServiceStars(5);
+        reviewMapper.insert(r);
+
+        // after the review: avgRating 5.0, and a rating|desc sort surfaces it first (> 4.0)
+        List<ProductListItem> after = productMapper.pageProducts(new Page<>(1, 50),
+                q("rating", " DESC", null, null)).getRecords();
+        double afterAvg = after.stream()
+                .filter(x -> x.getId().equals(p.getId()))
+                .findFirst().map(ProductListItem::getAvgRating).orElse(-1.0);
+        assertThat(afterAvg).isEqualTo(5.0);
+        assertThat(after.get(0).getId()).isEqualTo(p.getId());
+        assertThat(after.get(0).getAvgRating()).isEqualTo(5.0);
     }
 
     @Test
