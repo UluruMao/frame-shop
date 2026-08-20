@@ -52,6 +52,8 @@ class CheckoutServiceImplTest {
         r.setCustomerName("Bob");
         r.setCustomerEmail("b@x.com");
         r.setShippingAddress("here");
+        r.setCustomerPhone("13900000000");
+        r.setPaymentMethod("WECHAT");
         r.setIdempotencyKey(key);
         return r;
     }
@@ -117,6 +119,27 @@ class CheckoutServiceImplTest {
     }
 
     @Test
+    void checkout_invalidPaymentMethod_throwsParamInvalid() {
+        CheckoutRequest r = req("key-3b");
+        r.setPaymentMethod("BITCOIN"); // not one of WECHAT/ALIPAY/BANK_CARD
+
+        assertThatThrownBy(() -> checkoutService.checkout(r, 7L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("code").isEqualTo(1001); // PARAM_INVALID
+        verify(stockGateService, never()).tryClaimStock(anyList(), anyList());
+    }
+
+    @Test
+    void checkout_nullPaymentMethod_throwsParamInvalid() {
+        CheckoutRequest r = req("key-3c");
+        r.setPaymentMethod(null);
+
+        assertThatThrownBy(() -> checkoutService.checkout(r, 7L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("code").isEqualTo(1001); // PARAM_INVALID
+    }
+
+    @Test
     void checkout_multiItem_aggregatesQuantities() {
         OrderItemDTO a = new OrderItemDTO();
         a.setProductId(1L);
@@ -129,6 +152,8 @@ class CheckoutServiceImplTest {
         r.setCustomerName("Bob");
         r.setCustomerEmail("b@x.com");
         r.setShippingAddress("here");
+        r.setCustomerPhone("13900000000");
+        r.setPaymentMethod("ALIPAY");
         r.setIdempotencyKey("key-4");
 
         Product p = new Product();

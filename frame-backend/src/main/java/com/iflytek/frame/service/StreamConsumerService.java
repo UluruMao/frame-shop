@@ -3,6 +3,7 @@ package com.iflytek.frame.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iflytek.frame.common.OrderStatus;
+import com.iflytek.frame.common.PaymentMethod;
 import com.iflytek.frame.entity.Order;
 import com.iflytek.frame.entity.OrderItem;
 import com.iflytek.frame.entity.Product;
@@ -206,6 +207,8 @@ public class StreamConsumerService {
         int totalInCents;
         String customerName;
         String customerEmail;
+        String customerPhone;
+        String paymentMethod;
         String shippingAddress;
         JsonNode itemsNode;
 
@@ -217,6 +220,12 @@ public class StreamConsumerService {
             totalInCents = node.get("totalInCents").asInt();
             customerName = node.get("customerName").asText();
             customerEmail = node.get("customerEmail").asText();
+            // customerPhone / paymentMethod are Phase C additions — tolerate their absence
+            // (a stale payload queued before the fields existed) by null-checking the node.
+            JsonNode phoneNode = node.get("customerPhone");
+            customerPhone = phoneNode != null && !phoneNode.isNull() ? phoneNode.asText() : null;
+            JsonNode payNode = node.get("paymentMethod");
+            paymentMethod = payNode != null && !payNode.isNull() ? payNode.asText() : null;
             shippingAddress = node.get("shippingAddress").asText();
             itemsNode = node.get("items");
         } catch (Exception parseEx) {
@@ -229,6 +238,10 @@ public class StreamConsumerService {
             order.setUserId(userId);
             order.setCustomerName(customerName);
             order.setCustomerEmail(customerEmail);
+            order.setCustomerPhone(customerPhone);
+            if (paymentMethod != null) {
+                order.setPaymentMethod(PaymentMethod.valueOf(paymentMethod));
+            }
             order.setShippingAddress(shippingAddress);
             order.setTotalInCents(totalInCents);
             order.setStatus(OrderStatus.PENDING);

@@ -106,6 +106,8 @@ class LoadMutexTest {
                     req.setCustomerName("n");
                     req.setCustomerEmail("e");
                     req.setShippingAddress("a");
+                    req.setCustomerPhone(phone);
+                    req.setPaymentMethod("WECHAT");
                     req.setIdempotencyKey(UUID.randomUUID().toString());
                     try {
                         checkoutService.checkout(req, u.getId());

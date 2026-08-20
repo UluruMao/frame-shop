@@ -95,7 +95,22 @@ export interface OrderItem {
   quantity: number
 }
 
-export type OrderStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'FAILED'
+export type OrderStatus =
+  | 'PENDING'
+  | 'PAID'
+  | 'CANCELLED'
+  | 'FAILED'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'COMPLETED'
+  | 'REFUND_PENDING'
+  | 'REFUNDED'
+
+/** Refund lifecycle for an order (mirrors backend RefundStatus enum). */
+export type RefundStatus = 'NONE' | 'PENDING' | 'APPROVED' | 'DENIED'
+
+/** Payment channel selected at checkout (mock — no real gateway). */
+export type PaymentMethod = 'WECHAT' | 'ALIPAY' | 'BANK_CARD'
 
 export interface Order {
   id: number
@@ -106,6 +121,23 @@ export interface Order {
   totalInCents: number
   status: OrderStatus
   idempotencyKey: string
+  /** Phone captured at checkout for SMS-gated flows (UC001/015). */
+  customerPhone?: string
+  /** Payment channel chosen by the user at checkout. */
+  paymentMethod?: PaymentMethod
+  /** Carrier tracking number, set when the admin ships the order. */
+  trackingNumber?: string
+  /** Timestamps for each lifecycle transition (ISO strings from the backend). */
+  paidAt?: string
+  shippedAt?: string
+  deliveredAt?: string
+  completedAt?: string
+  /** Refund state — NONE unless a refund has been requested. */
+  refundStatus?: RefundStatus
+  /** User-supplied reason for requesting a refund. */
+  refundReason?: string
+  /** Line items for the order (returned by GET /orders/{id}/items). */
+  items?: OrderItem[]
   createTime?: string
   updateTime?: string
 }
@@ -121,6 +153,10 @@ export interface CheckoutRequest {
   customerEmail: string
   shippingAddress: string
   idempotencyKey: string
+  /** Phone for SMS verification / notifications (required by backend UC001). */
+  customerPhone: string
+  /** Payment channel (required — drives the mock payment flow). */
+  paymentMethod: PaymentMethod
 }
 
 /**

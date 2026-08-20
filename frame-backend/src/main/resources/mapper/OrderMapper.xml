@@ -13,4 +13,34 @@
         where id = #{id} and status = #{from}
     </update>
 
+    <select id="selectPendingBefore" resultType="com.iflytek.frame.entity.Order">
+        select * from orders where status = 'PENDING' and create_time &lt; #{cutoff}
+    </select>
+
+    <select id="selectDeliveredBefore" resultType="com.iflytek.frame.entity.Order">
+        select * from orders where status = 'DELIVERED' and delivered_at &lt; #{cutoff}
+    </select>
+
+    <update id="updateStatusAndTracking">
+        update orders set status = #{to}, tracking_number = #{tracking}, shipped_at = #{shippedAt}, update_time = now()
+        where id = #{id} and status = #{from}
+    </update>
+
+    <update id="updateStatusAndRefund">
+        update orders set status = #{to}, refund_status = #{refundStatus},
+               <if test="reason != null">refund_reason = #{reason},</if>
+               update_time = now()
+        where id = #{id} and status = #{from}
+    </update>
+
+    <update id="updateStatusAndDelivered">
+        update orders set status = #{to}, delivered_at = #{deliveredAt}, update_time = now()
+        where id = #{id} and status = #{from}
+    </update>
+
+    <update id="updateStatusAndPaid">
+        update orders set status = #{to}, paid_at = #{paidAt}, update_time = now()
+        where id = #{id} and status = #{from}
+    </update>
+
 </mapper>

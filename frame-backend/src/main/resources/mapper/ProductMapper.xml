@@ -41,7 +41,7 @@
             SELECT oi.product_id, SUM(oi.quantity) AS sold
             FROM order_item oi
             JOIN orders o ON o.id = oi.order_id
-            WHERE o.status = 'PAID'
+            WHERE o.status IN ('PAID', 'SHIPPED', 'DELIVERED', 'COMPLETED')
             GROUP BY oi.product_id
         ) s ON s.product_id = p.id
         LEFT JOIN (

@@ -17,6 +17,10 @@ public class CheckoutRequest {
     private String customerName;
     private String customerEmail;
     private String shippingAddress;
+    @NotBlank(message = "customerPhone required")
+    private String customerPhone;
+    @NotBlank(message = "paymentMethod required")
+    private String paymentMethod;   // WECHAT/ALIPAY/BANK_CARD — validated in the service
     @NotBlank(message = "idempotencyKey required")
     private String idempotencyKey;
 }
