@@ -91,6 +91,8 @@ class CheckoutFlowIntegrationTest {
         req.setCustomerName("x");
         req.setCustomerEmail("x@x");
         req.setShippingAddress("y");
+        req.setCustomerPhone("13900000000");
+        req.setPaymentMethod("WECHAT");
         req.setIdempotencyKey(UUID.randomUUID().toString());
         CheckoutResponse resp = checkoutService.checkout(req, user.getId());
 

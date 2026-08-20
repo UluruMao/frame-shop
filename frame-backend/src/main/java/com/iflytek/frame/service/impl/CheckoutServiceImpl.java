@@ -16,9 +16,12 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -50,6 +53,10 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /** Accepted payment methods — validated before enqueuing so a bad value fails fast (PARAM_INVALID). */
+    private static final Set<String> VALID_PAYMENT_METHODS =
+            new HashSet<>(Arrays.asList("WECHAT", "ALIPAY", "BANK_CARD"));
+
     /**
      * Unique-per-JVM correlation-id generator. Seeded from millis; each call increments.
      * This MUST be unique per checkout call: the orderId is the XADD stream-entry field
@@ -64,6 +71,12 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     @Override
     public CheckoutResponse checkout(CheckoutRequest request, Long userId) {
+        // 0. Validate payment method up front — fail fast (PARAM_INVALID) before touching Redis/DB.
+        if (request.getPaymentMethod() == null
+                || !VALID_PAYMENT_METHODS.contains(request.getPaymentMethod().toUpperCase())) {
+            throw new BusinessException(ResultCode.PARAM_INVALID, "paymentMethod must be one of WECHAT/ALIPAY/BANK_CARD");
+        }
+
         // 1. Aggregate quantities per product (dedup within the cart).
         Map<Long, Integer> qtyByProduct = new LinkedHashMap<>();
         for (OrderItemDTO item : request.getItems()) {
@@ -130,6 +143,8 @@ public class CheckoutServiceImpl implements CheckoutService {
             node.put("userId", userId);
             node.put("customerName", req.getCustomerName());
             node.put("customerEmail", req.getCustomerEmail());
+            node.put("customerPhone", req.getCustomerPhone());
+            node.put("paymentMethod", req.getPaymentMethod().toUpperCase());
             node.put("shippingAddress", req.getShippingAddress());
             node.put("totalInCents", total);
             node.put("idempotencyKey", req.getIdempotencyKey());

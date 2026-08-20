@@ -113,6 +113,13 @@ public class SecurityConfig {
                         // admin-only operation-log audit trail
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/admin/operation-logs").hasRole("ADMIN")
+                        // admin-only order lifecycle + refund adjudication (Phase C)
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/admin/orders", "/admin/refunds").hasRole("ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/admin/orders/{id}/ship", "/admin/orders/{id}/deliver",
+                                "/admin/refunds/{orderId}/approve", "/admin/refunds/{orderId}/deny")
+                                .hasRole("ADMIN")
                         // everything else requires authentication
                         .anyRequest().authenticated())
                 .exceptionHandling(eh -> eh
