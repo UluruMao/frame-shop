@@ -1,9 +1,15 @@
 package com.iflytek.frame.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.iflytek.frame.dto.ProductDetail;
+import com.iflytek.frame.dto.ProductListItem;
 import com.iflytek.frame.entity.Product;
+import com.iflytek.frame.util.PageQuery;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
 
 @Mapper
 public interface ProductMapper extends BaseMapper<Product> {
@@ -22,4 +28,13 @@ public interface ProductMapper extends BaseMapper<Product> {
     int recreditStock(@Param("id") Long id, @Param("qty") int qty);
 
     void updateImageUrl(@Param("id") Long id, @Param("imageUrl") String imageUrl);
+
+    /** Paginated catalog query with keyword + category filter and price/sales/rating sort. */
+    IPage<ProductListItem> pageProducts(IPage<?> page, @Param("q") PageQuery q);
+
+    /** Single product detail with sold + avgRating aggregates. */
+    ProductDetail findDetailById(@Param("id") Long id);
+
+    /** Distinct non-null categories for the filter dropdown. */
+    List<String> selectDistinctCategories();
 }

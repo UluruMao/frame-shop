@@ -19,4 +19,70 @@
         update product set image_url = #{imageUrl}, update_time = now() where id = #{id}
     </update>
 
+    <resultMap id="productListItemMap" type="com.iflytek.frame.dto.ProductListItem">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="priceInCents" column="price_in_cents"/>
+        <result property="stock" column="stock"/>
+        <result property="imageUrl" column="image_url"/>
+        <result property="category" column="category"/>
+        <result property="isFlashSale" column="is_flash_sale"/>
+        <result property="flashSaleAt" column="flash_sale_at"/>
+        <result property="description" column="description"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="sold" column="sold"/>
+        <result property="avgRating" column="avg_rating"/>
+    </resultMap>
+
+    <sql id="catalogFrom">
+        FROM product p
+        LEFT JOIN (
+            SELECT oi.product_id, SUM(oi.quantity) AS sold
+            FROM order_item oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.status = 'PAID'
+            GROUP BY oi.product_id
+        ) s ON s.product_id = p.id
+        LEFT JOIN (
+            SELECT product_id, AVG((quality_stars + logistics_stars + service_stars) / 3.0) AS avg_rating
+            FROM review GROUP BY product_id
+        ) r ON r.product_id = p.id
+    </sql>
+
+    <select id="pageProducts" resultMap="productListItemMap">
+        SELECT p.id, p.name, p.price_in_cents, p.stock, p.image_url, p.category,
+               p.is_flash_sale, p.flash_sale_at, p.description, p.create_time, p.update_time,
+               COALESCE(s.sold, 0) AS sold,
+               COALESCE(r.avg_rating, 0) AS avg_rating
+        <include refid="catalogFrom"/>
+        <where>
+            <if test="q.category != null and q.category != ''">AND p.category = #{q.category}</if>
+            <if test="q.keywords != null and q.keywords.size() > 0">
+                <foreach collection="q.keywords" item="kw" separator=" ">AND p.name LIKE CONCAT('%', #{kw}, '%')</foreach>
+            </if>
+        </where>
+        ORDER BY
+        <choose>
+            <when test="q.sortField == 'price'">p.price_in_cents</when>
+            <when test="q.sortField == 'sales'">sold</when>
+            <when test="q.sortField == 'rating'">avg_rating</when>
+            <otherwise>p.create_time</otherwise>
+        </choose>
+        ${q.sortOrderSql}
+    </select>
+
+    <select id="findDetailById" resultType="com.iflytek.frame.dto.ProductDetail">
+        SELECT p.id, p.name, p.price_in_cents, p.stock, p.image_url, p.category,
+               p.is_flash_sale, p.flash_sale_at, p.description, p.create_time, p.update_time,
+               COALESCE(s.sold, 0) AS sold,
+               COALESCE(r.avg_rating, 0) AS avg_rating
+        <include refid="catalogFrom"/>
+        WHERE p.id = #{id}
+    </select>
+
+    <select id="selectDistinctCategories" resultType="java.lang.String">
+        SELECT DISTINCT category FROM product WHERE category IS NOT NULL ORDER BY category
+    </select>
+
 </mapper>
