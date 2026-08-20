@@ -71,6 +71,21 @@ export interface Product {
   updateTime?: string
 }
 
+/**
+ * Detail view from GET /products/{id}: Product fields plus sold + avgRating
+ * aggregates (used on the product detail page header).
+ */
+export interface ProductDetail extends Product {
+  sold: number
+  avgRating: number
+}
+
+/** List item from GET /products: Product fields plus sold + avgRating. */
+export interface ProductListItem extends Product {
+  sold: number
+  avgRating: number
+}
+
 export interface OrderItem {
   id: number
   orderId: number
@@ -128,4 +143,12 @@ export interface PageResult<T> {
 export interface PageQuery {
   current?: number
   size?: number
+  /** Search keyword (split on comma/space into ANDed LIKE terms server-side). */
+  keyword?: string
+  /** Exact category filter. */
+  category?: string
+  /** Sort field: 'price' | 'sales' | 'rating'. Omit = by recency. */
+  sortField?: 'price' | 'sales' | 'rating'
+  /** Sort direction. */
+  sortOrder?: 'asc' | 'desc'
 }

@@ -33,4 +33,18 @@ public class PageQuery implements Serializable {
 
     @Schema(description = "Sort direction: asc/desc", example = "desc")
     private String sortOrder = "desc";
+
+    @Schema(description = "Search keyword (split on comma/space into ANDed LIKE terms)", example = "red widget")
+    private String keyword;
+
+    @Schema(description = "Category filter (exact match)", example = "electronics")
+    private String category;
+
+    /** Derived by the service: keyword split on [,\s]+, trimmed, empties dropped. Null if blank. Not a request param. */
+    @io.swagger.v3.oas.annotations.media.Schema(hidden = true)
+    private transient java.util.List<String> keywords;
+
+    /** Derived by the service: " ASC" or " DESC" (whitelist-validated). Not a request param. */
+    @io.swagger.v3.oas.annotations.media.Schema(hidden = true)
+    private transient String sortOrderSql;
 }

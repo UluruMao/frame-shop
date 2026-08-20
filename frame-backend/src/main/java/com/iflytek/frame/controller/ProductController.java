@@ -3,6 +3,8 @@ package com.iflytek.frame.controller;
 import com.iflytek.frame.common.PageResult;
 import com.iflytek.frame.common.Result;
 import com.iflytek.frame.dto.ProductDTO;
+import com.iflytek.frame.dto.ProductDetail;
+import com.iflytek.frame.dto.ProductListItem;
 import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.service.ProductService;
 import com.iflytek.frame.util.PageQuery;
@@ -15,6 +17,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @Tag(name = "Product", description = "Product CRUD + image upload")
 @RestController
 @RequestMapping("/products")
@@ -22,16 +26,22 @@ import org.springframework.web.multipart.MultipartFile;
 public class ProductController {
     private final ProductService service;
 
-    @Operation(summary = "Get a product by id")
+    @Operation(summary = "Get a product detail by id (with sold + avgRating)")
     @GetMapping("/{id}")
-    public Result<Product> get(@PathVariable Long id) {
-        return Result.success(service.getById(id));
+    public Result<ProductDetail> get(@PathVariable Long id) {
+        return Result.success(service.getDetail(id));
     }
 
-    @Operation(summary = "List products (paginated)")
+    @Operation(summary = "List products (paginated, searchable, sortable)")
     @GetMapping
-    public Result<PageResult<Product>> page(@Valid @ParameterObject PageQuery query) {
+    public Result<PageResult<ProductListItem>> page(@Valid @ParameterObject PageQuery query) {
         return Result.success(service.page(query));
+    }
+
+    @Operation(summary = "List distinct product categories")
+    @GetMapping("/categories")
+    public Result<List<String>> categories() {
+        return Result.success(service.listCategories());
     }
 
     @Operation(summary = "Create a product")

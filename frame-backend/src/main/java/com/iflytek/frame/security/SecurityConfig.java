@@ -98,7 +98,7 @@ public class SecurityConfig {
                         ).permitAll()
                         // public product reads (browsing — no login)
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
-                                "/products", "/products/{id}").permitAll()
+                                "/products", "/products/{id}", "/products/categories").permitAll()
                         // public product images (uploaded static files — anonymous browsing)
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/uploads/**").permitAll()
