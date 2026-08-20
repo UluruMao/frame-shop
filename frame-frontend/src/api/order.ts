@@ -96,9 +96,18 @@ export function adminDeliver(id: number): Promise<Order> {
   return request.post<Order>(`/admin/orders/${id}/deliver`)
 }
 
-/** GET /admin/refunds — list all orders with a pending refund request. */
-export function adminRefundRequests(): Promise<Order[]> {
-  return request.get<Order[]>('/admin/refunds')
+/**
+ * GET /admin/refunds — paginated list of all orders with a pending refund
+ * request. The backend returns `Result<PageResult<Order>>` (the axios instance
+ * unwraps to the page), so consume `.records` for the rows.
+ */
+export function adminRefundRequests(
+  current = 1,
+  size = 100,
+): Promise<PageResult<Order>> {
+  return request.get<PageResult<Order>>('/admin/refunds', {
+    params: { current, size },
+  })
 }
 
 /** POST /admin/refunds/{orderId}/approve — approve the refund (→ REFUNDED). */

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Shield, Zap, Pencil, Trash2, Plus, Loader2 } from 'lucide-react'
+import { Shield, Zap, Pencil, Trash2, Plus, Loader2, Package, CheckCheck, RefreshCw } from 'lucide-react'
 import {
   pageProducts,
   createProduct,
@@ -7,9 +7,47 @@ import {
   deleteProduct,
   openFlashSale,
 } from '@/api/product'
-import type { Product } from '@/api/types'
+import {
+  adminListOrders,
+  adminShip,
+  adminDeliver,
+  adminRefundRequests,
+  adminApproveRefund,
+  adminDenyRefund,
+} from '@/api/order'
+import type { Order, OrderStatus, Product } from '@/api/types'
 import { formatPrice } from './Products'
 import { useIsAdmin } from '@/store/useAuthStore'
+
+/** Color for each order status badge (mirrors Orders.tsx). */
+const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
+  PENDING: 'bg-amber-100 text-amber-700',
+  PAID: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-slate-100 text-slate-600',
+  FAILED: 'bg-red-100 text-red-700',
+  SHIPPED: 'bg-indigo-100 text-indigo-700',
+  DELIVERED: 'bg-blue-100 text-blue-700',
+  COMPLETED: 'bg-slate-100 text-slate-600',
+  REFUND_PENDING: 'bg-orange-100 text-orange-700',
+  REFUNDED: 'bg-red-100 text-red-700',
+}
+
+/** Top-level Admin tabs: Products (CRUD) and Orders (shipping/refund). */
+type AdminTab = 'products' | 'orders'
+
+/** Status-filter options for the admin orders table. */
+const ORDER_STATUS_FILTERS: { label: string; value?: OrderStatus }[] = [
+  { label: 'All' },
+  { label: 'Pending', value: 'PENDING' },
+  { label: 'Paid', value: 'PAID' },
+  { label: 'Shipped', value: 'SHIPPED' },
+  { label: 'Delivered', value: 'DELIVERED' },
+  { label: 'Completed', value: 'COMPLETED' },
+  { label: 'Refund pending', value: 'REFUND_PENDING' },
+  { label: 'Refunded', value: 'REFUNDED' },
+  { label: 'Cancelled', value: 'CANCELLED' },
+  { label: 'Failed', value: 'FAILED' },
+]
 
 /**
  * Convert an ISO datetime string (e.g. "2026-08-17T13:00:00") to the
@@ -53,6 +91,7 @@ export default function Admin() {
   // Client-side role gate: the nav link is hidden for non-admins, but the
   // route itself isn't guarded, so block direct navigation to /admin.
   const isAdmin = useIsAdmin()
+  const [tab, setTab] = useState<AdminTab>('products')
   const [rows, setRows] = useState<Product[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -61,6 +100,21 @@ export default function Admin() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [saleId, setSaleId] = useState<number | null>(null)
+
+  // --- Orders tab state ---
+  const [orders, setOrders] = useState<Order[]>([])
+  const [ordersTotal, setOrdersTotal] = useState(0)
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [ordersError, setOrdersError] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>(undefined)
+  const [busyOrderId, setBusyOrderId] = useState<number | null>(null)
+  // Per-row tracking-number input (keyed by order id) for the Ship action.
+  const [trackingInputs, setTrackingInputs] = useState<Record<number, string>>({})
+
+  // --- Refunds sub-section state ---
+  const [refunds, setRefunds] = useState<Order[]>([])
+  const [refundsLoading, setRefundsLoading] = useState(false)
+  const [refundsError, setRefundsError] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -163,18 +217,154 @@ export default function Admin() {
     }
   }
 
+  // --- Orders tab: load + admin actions (ship/deliver) ---
+
+  async function loadOrders() {
+    setOrdersLoading(true)
+    setOrdersError(null)
+    try {
+      const res = await adminListOrders(statusFilter)
+      setOrders(res.records)
+      setOrdersTotal(res.total)
+    } catch (err) {
+      setOrdersError(err instanceof Error ? err.message : 'failed to load orders')
+    } finally {
+      setOrdersLoading(false)
+    }
+  }
+
+  // (Re)load orders whenever the status filter changes while on the orders tab.
+  useEffect(() => {
+    if (isAdmin && tab === 'orders') void loadOrders()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, tab, statusFilter])
+
+  async function handleShip(id: number) {
+    const tracking = (trackingInputs[id] ?? '').trim()
+    if (!tracking) {
+      setOrdersError('Enter a tracking number before shipping')
+      return
+    }
+    setBusyOrderId(id)
+    setOrdersError(null)
+    try {
+      await adminShip(id, tracking)
+      setTrackingInputs((prev) => ({ ...prev, [id]: '' }))
+      await Promise.all([loadOrders(), loadRefunds()])
+    } catch (err) {
+      setOrdersError(err instanceof Error ? err.message : 'ship failed')
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
+
+  async function handleDeliver(id: number) {
+    setBusyOrderId(id)
+    setOrdersError(null)
+    try {
+      await adminDeliver(id)
+      await loadOrders()
+    } catch (err) {
+      setOrdersError(err instanceof Error ? err.message : 'deliver failed')
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
+
+  // --- Refunds sub-section ---
+
+  async function loadRefunds() {
+    setRefundsLoading(true)
+    setRefundsError(null)
+    try {
+      const res = await adminRefundRequests()
+      setRefunds(res.records)
+    } catch (err) {
+      setRefundsError(err instanceof Error ? err.message : 'failed to load refunds')
+    } finally {
+      setRefundsLoading(false)
+    }
+  }
+
+  // Load refunds whenever the orders tab is shown.
+  useEffect(() => {
+    if (isAdmin && tab === 'orders') void loadRefunds()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, tab])
+
+  async function handleApproveRefund(orderId: number) {
+    setBusyOrderId(orderId)
+    setRefundsError(null)
+    try {
+      await adminApproveRefund(orderId)
+      await Promise.all([loadRefunds(), loadOrders()])
+    } catch (err) {
+      setRefundsError(err instanceof Error ? err.message : 'approve refund failed')
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
+
+  async function handleDenyRefund(orderId: number) {
+    setBusyOrderId(orderId)
+    setRefundsError(null)
+    try {
+      await adminDenyRefund(orderId)
+      await Promise.all([loadRefunds(), loadOrders()])
+    } catch (err) {
+      setRefundsError(err instanceof Error ? err.message : 'deny refund failed')
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Shield className="w-5 h-5 text-brand-600" />
         <h1 className="text-xl font-semibold text-slate-800">Admin</h1>
-        <span className="text-sm text-slate-400">({total} products)</span>
+        {tab === 'products' && (
+          <span className="text-sm text-slate-400">({total} products)</span>
+        )}
+        {tab === 'orders' && (
+          <span className="text-sm text-slate-400">({ordersTotal} orders)</span>
+        )}
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {/* Tab switcher */}
+      <div className="flex items-center gap-1 border-b border-slate-200">
+        <button
+          onClick={() => setTab('products')}
+          className={[
+            'px-3 py-2 text-sm border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+            tab === 'products'
+              ? 'border-brand-600 text-brand-600 font-medium'
+              : 'border-transparent text-slate-600 hover:text-slate-800',
+          ].join(' ')}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          Products
+        </button>
+        <button
+          onClick={() => setTab('orders')}
+          className={[
+            'px-3 py-2 text-sm border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+            tab === 'orders'
+              ? 'border-brand-600 text-brand-600 font-medium'
+              : 'border-transparent text-slate-600 hover:text-slate-800',
+          ].join(' ')}
+        >
+          <Package className="w-3.5 h-3.5" />
+          Orders
+        </button>
+      </div>
 
-      {/* Create / edit form */}
-      <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+      {tab === 'products' && (
+        <>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          {/* Create / edit form */}
+          <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
         <h2 className="text-sm font-medium text-slate-700">
           {editingId !== null ? `Edit product #${editingId}` : 'New product'}
         </h2>
@@ -343,6 +533,192 @@ export default function Admin() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+        </>
+      )}
+
+      {/* --- Orders tab --- */}
+      {tab === 'orders' && (
+        <div className="space-y-6">
+          {/* Refunds sub-section */}
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-orange-600" />
+              <h2 className="text-sm font-medium text-slate-700">Refund requests</h2>
+              <button
+                onClick={() => { void loadRefunds(); void loadOrders() }}
+                className="ml-auto text-xs text-slate-500 hover:text-slate-800"
+              >
+                Refresh
+              </button>
+            </div>
+            {refundsError && <p className="text-sm text-red-600">{refundsError}</p>}
+            {refundsLoading ? (
+              <p className="text-sm text-slate-500">Loading refunds…</p>
+            ) : refunds.length === 0 ? (
+              <p className="text-sm text-slate-400">No pending refund requests.</p>
+            ) : (
+              <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium">Order</th>
+                      <th className="text-left px-4 py-2 font-medium">Customer</th>
+                      <th className="text-left px-4 py-2 font-medium">Reason</th>
+                      <th className="text-right px-4 py-2 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refunds.map((o) => (
+                      <tr key={o.id} className="border-t border-slate-100">
+                        <td className="px-4 py-2 text-slate-500">#{o.id}</td>
+                        <td className="px-4 py-2 text-slate-800">{o.customerName}</td>
+                        <td className="px-4 py-2 text-slate-600 max-w-xs truncate">
+                          {o.refundReason || '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right space-x-2">
+                          <button
+                            onClick={() => handleApproveRefund(o.id)}
+                            disabled={busyOrderId === o.id}
+                            className="text-xs text-green-600 hover:underline disabled:opacity-50"
+                          >
+                            {busyOrderId === o.id ? '…' : 'Approve'}
+                          </button>
+                          <button
+                            onClick={() => handleDenyRefund(o.id)}
+                            disabled={busyOrderId === o.id}
+                            className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                          >
+                            {busyOrderId === o.id ? '…' : 'Deny'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Orders table */}
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-brand-600" />
+              <h2 className="text-sm font-medium text-slate-700">All orders</h2>
+              <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500">
+                Status
+                <select
+                  value={statusFilter ?? ''}
+                  onChange={(e) =>
+                    setStatusFilter((e.target.value || undefined) as OrderStatus | undefined)
+                  }
+                  className="px-2 py-1 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  {ORDER_STATUS_FILTERS.map((f) => (
+                    <option key={f.label} value={f.value ?? ''}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {ordersError && <p className="text-sm text-red-600">{ordersError}</p>}
+            {ordersLoading ? (
+              <p className="text-sm text-slate-500">Loading…</p>
+            ) : (
+              <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium">Order</th>
+                      <th className="text-left px-4 py-2 font-medium">Customer</th>
+                      <th className="text-right px-4 py-2 font-medium">Total</th>
+                      <th className="text-left px-4 py-2 font-medium">Status</th>
+                      <th className="text-left px-4 py-2 font-medium">Tracking</th>
+                      <th className="text-right px-4 py-2 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map((o) => (
+                      <tr key={o.id} className="border-t border-slate-100">
+                        <td className="px-4 py-2 text-slate-500">#{o.id}</td>
+                        <td className="px-4 py-2 text-slate-800">
+                          {o.customerName}
+                          {o.customerPhone && (
+                            <span className="block text-xs text-slate-400">{o.customerPhone}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right text-slate-700">
+                          {formatPrice(o.totalInCents)}
+                        </td>
+                        <td className="px-4 py-2">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-medium ${ORDER_STATUS_COLORS[o.status]}`}
+                          >
+                            {o.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-slate-600 font-mono text-xs">
+                          {o.trackingNumber || '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {o.status === 'PAID' && (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <input
+                                placeholder="Tracking #"
+                                value={trackingInputs[o.id] ?? ''}
+                                onChange={(e) =>
+                                  setTrackingInputs((prev) => ({ ...prev, [o.id]: e.target.value }))
+                                }
+                                className="w-28 px-2 py-1 rounded border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                              />
+                              <button
+                                onClick={() => handleShip(o.id)}
+                                disabled={busyOrderId === o.id}
+                                className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
+                              >
+                                {busyOrderId === o.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Package className="w-3 h-3" />
+                                )}
+                                Ship
+                              </button>
+                            </div>
+                          )}
+                          {o.status === 'SHIPPED' && (
+                            <button
+                              onClick={() => handleDeliver(o.id)}
+                              disabled={busyOrderId === o.id}
+                              className="px-2.5 py-1 rounded-md bg-green-600 text-white text-xs font-medium hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                            >
+                              {busyOrderId === o.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <CheckCheck className="w-3 h-3" />
+                              )}
+                              Deliver
+                            </button>
+                          )}
+                          {o.status !== 'PAID' && o.status !== 'SHIPPED' && (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {orders.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                          No orders{statusFilter ? ` with status ${statusFilter}` : ''}.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </div>
       )}
     </div>

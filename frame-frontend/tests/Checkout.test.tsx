@@ -95,6 +95,19 @@ describe('Checkout three-stage flow', () => {
     expect(screen.getByText(/your cart is empty/i)).toBeInTheDocument()
   })
 
+  it('renders a required phone field + the three payment-method radios', () => {
+    renderCheckout()
+    const phoneInput = screen.getByLabelText(/phone/i)
+    expect(phoneInput).toHaveAttribute('required')
+    // All three payment-method radios are present (grouped by name).
+    const radios = screen.getAllByRole('radio', { name: /微信|支付宝|银行卡/i })
+    expect(radios).toHaveLength(3)
+    // Each radio shares the same name so they're mutually exclusive.
+    expect(new Set(radios.map((r) => (r as HTMLInputElement).name)).size).toBe(1)
+    // WECHAT (微信) is selected by default.
+    expect(screen.getByLabelText(/微信/i)).toBeChecked()
+  })
+
   it('stage 1 → 2 → 3: form → queued (poll) → pending (pay) → paid', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const mockedCheckout = vi.mocked(checkout)
@@ -115,11 +128,22 @@ describe('Checkout three-stage flow', () => {
     await user.type(screen.getByLabelText(/name/i), 'Test User')
     await user.type(screen.getByLabelText(/email/i), 'test@example.com')
     await user.type(screen.getByLabelText(/shipping address/i), '123 St')
+    await user.type(screen.getByLabelText(/phone/i), '13800138000')
+    // Payment method defaults to WECHAT (微信); select 支付宝 (ALIPAY) to
+    // prove the radio drives the submitted payload.
+    await user.click(screen.getByLabelText(/支付宝/i))
 
     await user.click(screen.getByRole('button', { name: /place order/i }))
 
     // Stage 2: checkout() called → shows "queued" spinner.
     expect(mockedCheckout).toHaveBeenCalledTimes(1)
+    // The checkout payload must include the required phone + payment method.
+    expect(mockedCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customerPhone: '13800138000',
+        paymentMethod: 'ALIPAY',
+      }),
+    )
     await waitFor(() => {
       expect(screen.getByText(/reserving stock/i)).toBeInTheDocument()
     })
@@ -174,6 +198,7 @@ describe('Checkout three-stage flow', () => {
     await user.type(screen.getByLabelText(/name/i), 'Test User')
     await user.type(screen.getByLabelText(/email/i), 'test@example.com')
     await user.type(screen.getByLabelText(/shipping address/i), '123 St')
+    await user.type(screen.getByLabelText(/phone/i), '13800138000')
     await user.click(screen.getByRole('button', { name: /place order/i }))
 
     await waitFor(() => {

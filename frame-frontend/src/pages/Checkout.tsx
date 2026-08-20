@@ -2,9 +2,29 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShoppingCart, Loader2, CheckCircle2, XCircle, CreditCard, RotateCw } from 'lucide-react'
 import { checkout, getOrder, payOrder } from '@/api/order'
-import type { Order, OrderStatus } from '@/api/types'
+import type { Order, OrderStatus, PaymentMethod } from '@/api/types'
 import { useCart } from '@/store/CartContext'
 import { formatPrice } from './Products'
+
+/** Color for each lifecycle status badge (all 9 OrderStatus values). */
+const STATUS_COLORS: Record<OrderStatus, string> = {
+  PENDING: 'bg-amber-100 text-amber-700',
+  PAID: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-slate-100 text-slate-600',
+  FAILED: 'bg-red-100 text-red-700',
+  SHIPPED: 'bg-indigo-100 text-indigo-700',
+  DELIVERED: 'bg-blue-100 text-blue-700',
+  COMPLETED: 'bg-slate-100 text-slate-600',
+  REFUND_PENDING: 'bg-orange-100 text-orange-700',
+  REFUNDED: 'bg-red-100 text-red-700',
+}
+
+/** Payment-method radio options shown in the checkout form. */
+const PAYMENT_OPTIONS: { value: PaymentMethod; label: string }[] = [
+  { value: 'WECHAT', label: '微信' },
+  { value: 'ALIPAY', label: '支付宝' },
+  { value: 'BANK_CARD', label: '银行卡' },
+]
 
 /** The three checkout stages — drives the whole page's state machine. */
 type Stage = 'form' | 'queued' | 'resolved' | 'paid'
@@ -35,6 +55,8 @@ export default function Checkout() {
   const [customerName, setCustomerName] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
   const [shippingAddress, setShippingAddress] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('WECHAT')
   const [orderId, setOrderId] = useState<number | null>(null)
   const [order, setOrder] = useState<Order | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -112,6 +134,8 @@ export default function Checkout() {
         customerName,
         customerEmail,
         shippingAddress,
+        customerPhone,
+        paymentMethod,
         idempotencyKey: crypto.randomUUID(),
       })
       setOrderId(res.orderId)
@@ -203,6 +227,36 @@ export default function Checkout() {
               onChange={setShippingAddress}
               required
             />
+            <Field
+              label="Phone"
+              id="customerPhone"
+              type="tel"
+              value={customerPhone}
+              onChange={setCustomerPhone}
+              required
+            />
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+            <h2 className="text-sm font-medium text-slate-700">Payment method</h2>
+            <div role="radiogroup" className="flex gap-4">
+              {PAYMENT_OPTIONS.map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer"
+                >
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value={opt.value}
+                    checked={paymentMethod === opt.value}
+                    onChange={() => setPaymentMethod(opt.value)}
+                    className="focus:ring-brand-500 text-brand-600"
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -355,13 +409,7 @@ function Field({
 }
 
 function StatusBadge({ status }: { status: OrderStatus }) {
-  const colors: Record<OrderStatus, string> = {
-    PENDING: 'bg-amber-100 text-amber-700',
-    PAID: 'bg-green-100 text-green-700',
-    CANCELLED: 'bg-slate-100 text-slate-600',
-    FAILED: 'bg-red-100 text-red-700',
-  }
   return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${colors[status]}`}>{status}</span>
+    <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[status]}`}>{status}</span>
   )
 }
