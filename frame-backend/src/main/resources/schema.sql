@@ -72,10 +72,13 @@ CREATE TABLE `review` (
     `logistics_stars` TINYINT      NOT NULL,
     `service_stars`   TINYINT      NOT NULL,
     `content`         TEXT,
+    `images`          VARCHAR(2048) DEFAULT NULL,
+    `is_anonymous`    TINYINT(1)   NOT NULL DEFAULT 0,
+    `edited_at`       DATETIME     DEFAULT NULL,
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_review_order` (`order_id`),
+    UNIQUE KEY `uk_review_order_product` (`order_id`, `product_id`),
     KEY `idx_review_product` (`product_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
