@@ -16,6 +16,8 @@ const routes: RouteObject[] = [
   { path: '/login', element: <Login /> },
   { path: '/register', element: <Register /> },
   { path: '/forgot-password', element: <ForgotPassword /> },
+  // Public catalog browse (UC000: guests may browse/search/sort). Add-to-cart stays protected.
+  { path: '/products', element: <Products /> },
   {
     path: '/',
     element: (
@@ -29,7 +31,6 @@ const routes: RouteObject[] = [
     children: [
       { index: true, element: <Dashboard /> },
       { path: 'dashboard', element: <Dashboard /> },
-      { path: 'products', element: <Products /> },
       { path: 'checkout', element: <Checkout /> },
       { path: 'orders', element: <Orders /> },
       { path: 'profile', element: <Profile /> },
