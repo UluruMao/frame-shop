@@ -115,7 +115,7 @@ class CheckoutFlowIntegrationTest {
         assertThat(persisted.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(persisted.getId()).isNotNull();
 
-        // 6. pay → atomic flipStatus(PENDING→PAID) conditional update succeeds
+        // 6. pay → atomic markPaid (PENDING→PAID, sets paid_at) conditional update succeeds
         Order paid = paymentService.pay(resp.getOrderId(), user.getId());
         assertThat(paid.getStatus()).isEqualTo(OrderStatus.PAID);
 

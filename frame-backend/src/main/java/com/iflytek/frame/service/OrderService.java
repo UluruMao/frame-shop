@@ -23,6 +23,14 @@ public interface OrderService {
     /** Buyer confirms receipt — flips SHIPPED→DELIVERED. */
     void confirmReceipt(Long id, Long userId);
 
+    /**
+     * Mark an order paid — atomic CAS PENDING→PAID recording {@code paid_at} in the same
+     * transition (mirrors {@code confirmReceipt}). Ownership is the caller's responsibility
+     * ({@code PaymentServiceImpl.pay()} authorizes via {@code getById} before invoking this).
+     * Throws CONFLICT if the order isn't PENDING.
+     */
+    void markPaid(Long id);
+
     /** List line items for an order (ownership-checked). */
     List<OrderItem> listItems(Long id, Long userId);
 

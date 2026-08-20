@@ -38,4 +38,9 @@
         where id = #{id} and status = #{from}
     </update>
 
+    <update id="updateStatusAndPaid">
+        update orders set status = #{to}, paid_at = #{paidAt}, update_time = now()
+        where id = #{id} and status = #{from}
+    </update>
+
 </mapper>

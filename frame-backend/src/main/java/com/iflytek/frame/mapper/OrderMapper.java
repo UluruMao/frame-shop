@@ -70,4 +70,15 @@ public interface OrderMapper extends BaseMapper<Order> {
                                  @Param("from") OrderStatus from,
                                  @Param("to") OrderStatus to,
                                  @Param("deliveredAt") LocalDateTime deliveredAt);
+
+    /**
+     * Atomic CAS flip PENDING→PAID recording the paid timestamp. Mirrors
+     * {@code updateStatusAndDelivered}: sets {@code paid_at} in the same atomic
+     * transition as the status flip (no race window), so every sibling timestamp
+     * (paid_at / shipped_at / delivered_at / completed_at) is set on its transition.
+     */
+    int updateStatusAndPaid(@Param("id") Long id,
+                             @Param("from") OrderStatus from,
+                             @Param("to") OrderStatus to,
+                             @Param("paidAt") LocalDateTime paidAt);
 }

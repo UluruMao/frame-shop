@@ -51,6 +51,11 @@ class ProductMapperIntegrationTest {
                 "VALUES (11,1,'u','u@e.com','addr',9000,'PENDING','ik-pend')");
         jdbc.update("INSERT INTO order_item (id,order_id,product_id,name,price_in_cents,quantity) " +
                 "VALUES (101,11,1,'Red Widget',1000,9)");
+        // SHIPPED order: 3x Blue Gadget — MUST count as sold (widened IN-list)
+        jdbc.update("INSERT INTO orders (id,user_id,customer_name,customer_email,shipping_address,total_in_cents,status,idempotency_key) " +
+                "VALUES (12,1,'u','u@e.com','addr',6000,'SHIPPED','ik-ship')");
+        jdbc.update("INSERT INTO order_item (id,order_id,product_id,name,price_in_cents,quantity) " +
+                "VALUES (102,12,2,'Blue Gadget',2000,3)");
         // one review on Red Widget: (5+4+3)/3 = 4.0 avg
         jdbc.update("INSERT INTO review (id,order_id,user_id,product_id,quality_stars,logistics_stars,service_stars,content) " +
                 "VALUES (1,10,1,1,5,4,3,'ok')");
@@ -91,12 +96,18 @@ class ProductMapperIntegrationTest {
     }
 
     @Test
-    void sales_sort_desc_paidOnly() {
+    void sales_sort_desc_paidAndShipped() {
         seedCatalog();
         List<ProductListItem> r = productMapper.pageProducts(new Page<>(1, 50),
                 q("sales", " DESC", null, null)).getRecords();
-        // Red Widget sold=4 (PAID only, PENDING excluded); others sold=0
+        // Red Widget sold=4 (PAID only; PENDING's 9 units excluded); Blue Gadget sold=3 (SHIPPED counts).
+        // Top seller = Red Widget (4), then Blue Gadget (3); both > 0 (IN-list widening exercised).
         assertThat(r.get(0).getName()).isEqualTo("Red Widget");
+        assertThat(r.get(0).getSold()).isEqualTo(4);
+        // SHIPPED now counts toward sold (widened IN-list); Blue Gadget has 3 SHIPPED units.
+        ProductListItem blue = r.stream().filter(p -> "Blue Gadget".equals(p.getName())).findFirst().orElseThrow();
+        assertThat(blue.getSold()).isEqualTo(3);
+        // PENDING is still excluded: Red Widget sold would be 13 (4+9) if PENDING counted — it stays 4.
         assertThat(r.get(0).getSold()).isEqualTo(4);
     }
 

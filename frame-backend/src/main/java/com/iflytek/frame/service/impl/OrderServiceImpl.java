@@ -163,6 +163,20 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
+    public void markPaid(Long id) {
+        Long realPk = resolveOrderId(id);
+        // Atomic CAS flip PENDING→PAID with paid_at in one update (no race window) — mirrors
+        // confirmReceipt. Ownership is checked by the caller (PaymentServiceImpl.pay authorizes
+        // via getById before invoking this).
+        int rows = orderMapper.updateStatusAndPaid(realPk, OrderStatus.PENDING, OrderStatus.PAID,
+                LocalDateTime.now());
+        if (rows == 0) {
+            throw new BusinessException(ResultCode.CONFLICT, "order cannot be paid in current state");
+        }
+    }
+
+    @Override
     public List<OrderItem> listItems(Long id, Long userId) {
         Long realPk = resolveOrderId(id);
         Order o = orderMapper.selectById(realPk);
