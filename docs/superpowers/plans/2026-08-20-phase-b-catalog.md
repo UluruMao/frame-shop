@@ -469,7 +469,7 @@ class ProductMapperIntegrationTest {
     void selectDistinctCategories() {
         seedCatalog();
         List<String> cats = productMapper.selectDistinctCategories();
-        assertThat(cats).containsExactly("toys", "tools");
+        assertThat(cats).containsExactly("tools", "toys");
     }
 }
 ```
@@ -548,7 +548,7 @@ Modify `frame-backend/src/main/resources/mapper/ProductMapper.xml` — add befor
         <where>
             <if test="q.category != null and q.category != ''">AND p.category = #{q.category}</if>
             <if test="q.keywords != null and q.keywords.size() > 0">
-                <foreach collection="q.keywords" item="kw" separator="AND">AND p.name LIKE CONCAT('%', #{kw}, '%')</foreach>
+                <foreach collection="q.keywords" item="kw" separator=" ">AND p.name LIKE CONCAT('%', #{kw}, '%')</foreach>
             </if>
         </where>
         ORDER BY
