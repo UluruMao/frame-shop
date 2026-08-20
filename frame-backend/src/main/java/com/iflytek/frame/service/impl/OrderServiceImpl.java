@@ -225,6 +225,11 @@ public class OrderServiceImpl implements OrderService {
         orderMapper.updateById(o);
     }
 
+    @Override
+    public List<Order> listUnreviewedOrders(Long userId) {
+        return orderMapper.selectUnreviewedOrders(userId);
+    }
+
     /**
      * Resolve a correlation id (or real PK) to the DB PK, or throw NOT_FOUND.
      *

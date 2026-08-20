@@ -8,6 +8,7 @@ import { suite as checkoutSuite } from './tests/checkout.test.mjs'
 import { suite as concurrencySuite } from './tests/concurrency.test.mjs'
 import { suite as catalogSuite } from './tests/catalog.test.mjs'
 import { suite as ordersSuite } from './tests/orders.test.mjs'
+import { suite as reviewsSuite } from './tests/reviews.test.mjs'
 
 // Pre-flight: is the live system reachable?
 async function preflight() {
@@ -43,7 +44,7 @@ async function main() {
   console.log(`✓ System reachable at ${env.BASE_URL}\n`)
 
   // testFiles: array of { name, tests } — populated as tasks add files.
-  const testFiles = [authSuite, productsSuite, catalogSuite, saleSuite, checkoutSuite, concurrencySuite, ordersSuite]
+  const testFiles = [authSuite, productsSuite, catalogSuite, saleSuite, checkoutSuite, concurrencySuite, ordersSuite, reviewsSuite]
   const runLog = []
   setLog((line) => runLog.push(line))
 

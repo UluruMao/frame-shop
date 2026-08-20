@@ -95,6 +95,44 @@ export interface OrderItem {
   quantity: number
 }
 
+/** A product review (UC010). One per (order, product). Mirrors backend ReviewVO. */
+export interface Review {
+  id: number
+  orderId: number
+  productId: number
+  productName?: string
+  qualityStars: number
+  logisticsStars: number
+  serviceStars: number
+  content?: string
+  imageUrls: string[]
+  isAnonymous: boolean
+  editedAt?: string
+  createTime?: string
+  /** Derived: true if the review was edited after first submit. */
+  edited: boolean
+}
+
+export interface ReviewCreateRequest {
+  orderId: number
+  productId: number
+  qualityStars: number
+  logisticsStars: number
+  serviceStars: number
+  content?: string
+  imageUrls?: string[]
+  isAnonymous?: boolean
+}
+
+export interface ReviewUpdateRequest {
+  qualityStars?: number
+  logisticsStars?: number
+  serviceStars?: number
+  content?: string
+  imageUrls?: string[]
+  isAnonymous?: boolean
+}
+
 export type OrderStatus =
   | 'PENDING'
   | 'PAID'

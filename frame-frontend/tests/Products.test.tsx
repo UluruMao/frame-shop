@@ -66,6 +66,24 @@ describe('Products — catalog (UC000)', () => {
     )
   })
 
+  it('sort dropdown exposes all 6 sort options incl sales|asc + rating|asc', async () => {
+    renderProducts()
+    await waitFor(() => expect(pageProducts).toHaveBeenCalled())
+    const select = screen.getByLabelText(/排序|sort/i) as HTMLSelectElement
+    const values = Array.from(select.options).map((o) => o.value)
+    expect(values).toEqual(
+      expect.arrayContaining([
+        '',
+        'price|asc',
+        'price|desc',
+        'sales|desc',
+        'sales|asc',
+        'rating|desc',
+        'rating|asc',
+      ]),
+    )
+  })
+
   it('filters by category', async () => {
     renderProducts()
     await waitFor(() => expect(pageProducts).toHaveBeenCalled())

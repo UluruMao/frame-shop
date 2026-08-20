@@ -20,6 +20,14 @@ vi.mock('@/api/order', () => ({
   payOrder: vi.fn(),
 }))
 
+vi.mock('@/api/review', () => ({
+  listUnreviewedOrders: vi.fn(),
+  listOrderReviews: vi.fn(),
+  createReview: vi.fn(),
+  updateReview: vi.fn(),
+  uploadReviewImage: vi.fn(),
+}))
+
 import {
   getMyOrders,
   cancelOrder,
@@ -29,6 +37,7 @@ import {
   getOrderItems,
   payOrder,
 } from '@/api/order'
+import { listUnreviewedOrders, listOrderReviews } from '@/api/review'
 import type { Order, OrderItem } from '@/api/types'
 
 function order(overrides: Partial<Order> = {}): Order {
@@ -75,20 +84,22 @@ beforeEach(() => {
   vi.clearAllMocks()
   ;(getMyOrders as any).mockResolvedValue(page([order()]))
   ;(getOrderItems as any).mockResolvedValue([item()])
+  ;(listUnreviewedOrders as any).mockResolvedValue([])
+  ;(listOrderReviews as any).mockResolvedValue([])
 })
 
 describe('Orders — tabs (Phase C)', () => {
-  it('renders the 5 active tabs + disabled 未评价 (Phase D) tab', async () => {
+  it('renders the 6 tabs incl. an active (clickable) 未评价 tab', async () => {
     renderOrders()
     await waitFor(() => expect(screen.getByText('全部')).toBeInTheDocument())
     expect(screen.getByText('未付款')).toBeInTheDocument()
     expect(screen.getByText('未发货')).toBeInTheDocument()
     expect(screen.getByText('未签收')).toBeInTheDocument()
     expect(screen.getByText('已完成')).toBeInTheDocument()
-    expect(screen.getByText(/未评价/)).toBeInTheDocument()
-    // The 未评价 tab is disabled (not clickable as a button).
-    const reviewTab = screen.getByText(/未评价/).closest('button')
-    expect(reviewTab).toBeDisabled()
+    expect(screen.getByText('未评价')).toBeInTheDocument()
+    // The 未评价 tab is now active (no longer disabled).
+    const reviewTab = screen.getByText('未评价').closest('button')
+    expect(reviewTab).not.toBeDisabled()
   })
 
   it('clicking 未付款 calls getMyOrders with status PENDING', async () => {
@@ -195,5 +206,30 @@ describe('Orders — line-items drawer', () => {
     await waitFor(() => expect(getOrderItems).toHaveBeenCalledWith(1))
     await waitFor(() => expect(screen.getByText('Blue Widget')).toBeInTheDocument())
     expect(screen.getByText('Red Gadget')).toBeInTheDocument()
+  })
+})
+
+describe('Orders — 未评价 tab + review button (Phase D)', () => {
+  it('未评价 tab fetches listUnreviewedOrders instead of getMyOrders', async () => {
+    ;(getMyOrders as any).mockResolvedValue(page([]))
+    ;(listUnreviewedOrders as any).mockResolvedValue([])
+    renderOrders()
+    await waitFor(() => expect(getMyOrders).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByText('未评价'))
+    await waitFor(() => expect(listUnreviewedOrders).toHaveBeenCalled())
+  })
+
+  it('drawer shows 写评价 button on a DELIVERED order item', async () => {
+    const o = order({ id: 5, status: 'DELIVERED' })
+    ;(getMyOrders as any).mockResolvedValue(page([o]))
+    ;(getOrderItems as any).mockResolvedValue([item({ orderId: 5, productId: 100 })])
+    ;(listOrderReviews as any).mockResolvedValue([])
+    renderOrders()
+    await waitFor(() => expect(screen.getByText('#5')).toBeInTheDocument())
+
+    // Expand the drawer via the 详情 button.
+    fireEvent.click(screen.getByRole('button', { name: /详情|detail/i }))
+    await waitFor(() => expect(screen.getByText('写评价')).toBeInTheDocument())
   })
 })

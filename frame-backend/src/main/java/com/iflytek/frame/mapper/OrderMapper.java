@@ -40,6 +40,13 @@ public interface OrderMapper extends BaseMapper<Order> {
     List<Order> selectDeliveredBefore(@Param("cutoff") LocalDateTime cutoff);
 
     /**
+     * Orders in {DELIVERED, COMPLETED} for a user that have ≥1 unreviewed line item —
+     * backs the 未评价 tab (UC010). An order is "unreviewed" if any of its order_item
+     * product_ids has no matching review row.
+     */
+    List<Order> selectUnreviewedOrders(@Param("userId") Long userId);
+
+    /**
      * Atomic CAS flip PAID→SHIPPED recording the tracking number + shipped timestamp.
      * Returns rows affected (0 → transition not allowed).
      */
