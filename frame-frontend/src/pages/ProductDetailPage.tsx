@@ -28,7 +28,16 @@ export default function ProductDetailPage() {
     setLiveStock(null)
     getProductDetail(Number(id))
       .then((d) => setDetail(d))
-      .catch((e) => { if (e?.response?.status === 404) setNotFound(true) })
+      .catch((e) => {
+        // The axios interceptor (src/api/request.ts) rejects with `new Error(message)`
+        // — a bare Error with no `.response` property — so checking `e.response.status`
+        // is dead code. The backend's GlobalExceptionHandler returns HTTP 404 with
+        // Result.fail(404, "product not found: <id>"), and the interceptor surfaces that
+        // message verbatim. Match by message to detect the not-found state.
+        if (/not found/i.test(e?.message ?? '')) {
+          setNotFound(true)
+        }
+      })
   }, [id])
 
   // Flash-sale live-stock polling (moved from the old FlashSaleCard).

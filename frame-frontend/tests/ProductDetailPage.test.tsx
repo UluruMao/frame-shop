@@ -90,7 +90,10 @@ describe('ProductDetailPage (UC000 detail)', () => {
   })
 
   it('renders 商品不存在 when the product is not found', async () => {
-    ;(getProductDetail as any).mockRejectedValue({ response: { status: 404 } })
+    // The axios interceptor (src/api/request.ts) rejects with a bare `new Error(message)`
+    // (no `.response` property) — exercise the REAL interceptor shape so this test
+    // actually guards the not-found detection in ProductDetailPage.
+    ;(getProductDetail as any).mockRejectedValue(new Error('product not found: 999999'))
     renderDetail('/products/999999')
     await waitFor(() => expect(screen.getByText(/商品不存在|not found/i)).toBeInTheDocument())
   })
