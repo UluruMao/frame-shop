@@ -10,7 +10,9 @@ import {
   getOrderItems,
   payOrder,
 } from '@/api/order'
-import type { Order, OrderItem, OrderStatus } from '@/api/types'
+import { listUnreviewedOrders, listOrderReviews } from '@/api/review'
+import ReviewModal from '@/components/ReviewModal'
+import type { Order, OrderItem, OrderStatus, Review } from '@/api/types'
 import { formatPrice } from './Products'
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
@@ -26,13 +28,13 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
 }
 
 /** Tab label → status filter passed to getMyOrders. undefined = all statuses. */
-const TABS: { label: string; status?: OrderStatus; disabled?: boolean }[] = [
+const TABS: { label: string; status?: OrderStatus; unreviewed?: boolean }[] = [
   { label: '全部' },
   { label: '未付款', status: 'PENDING' },
   { label: '未发货', status: 'PAID' },
   { label: '未签收', status: 'SHIPPED' },
   { label: '已完成', status: 'COMPLETED' },
-  { label: '未评价 (Phase D)', disabled: true },
+  { label: '未评价', unreviewed: true },
 ]
 
 /**
@@ -57,13 +59,27 @@ export default function Orders() {
   const [refundOrderId, setRefundOrderId] = useState<number | null>(null)
   const [refundReason, setRefundReason] = useState('')
 
+  // Phase D — 未评价 tab + per-item review modal.
+  const [unreviewedMode, setUnreviewedMode] = useState(false)
+  const [reviewsByOrder, setReviewsByOrder] = useState<Record<number, Review[]>>({})
+  const [reviewTarget, setReviewTarget] = useState<{
+    productId: number
+    existing: Review | null
+  } | null>(null)
+
   async function load() {
     setLoading(true)
     setError(null)
     try {
-      const res = await getMyOrders(1, 50, activeStatus)
-      setRows(res.records)
-      setTotal(res.total)
+      if (unreviewedMode) {
+        const list = await listUnreviewedOrders()
+        setRows(list)
+        setTotal(list.length)
+      } else {
+        const res = await getMyOrders(1, 50, activeStatus)
+        setRows(res.records)
+        setTotal(res.total)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to load orders')
     } finally {
@@ -74,7 +90,7 @@ export default function Orders() {
   useEffect(() => {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStatus])
+  }, [activeStatus, unreviewedMode])
 
   async function handlePay(id: number) {
     setBusyId(id)
@@ -163,6 +179,11 @@ export default function Orders() {
     } finally {
       setItemsLoading(false)
     }
+    // Phase D — fetch existing reviews for this order (best-effort; failures
+    // just leave the drawer without review badges — the button still works).
+    listOrderReviews(id)
+      .then((r) => setReviewsByOrder((prev) => ({ ...prev, [id]: r })))
+      .catch(() => {})
   }
 
   return (
@@ -185,19 +206,19 @@ export default function Orders() {
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-slate-200">
         {TABS.map((tab) => {
-          const active = tab.status === activeStatus
+          const active = unreviewedMode ? !!tab.unreviewed : tab.status === activeStatus
           return (
             <button
               key={tab.label}
-              disabled={tab.disabled}
-              onClick={() => setActiveStatus(tab.status)}
+              onClick={() => {
+                setActiveStatus(tab.status)
+                setUnreviewedMode(!!tab.unreviewed)
+              }}
               className={[
                 'px-3 py-2 text-sm border-b-2 -mb-px transition-colors',
-                tab.disabled
-                  ? 'text-slate-300 cursor-not-allowed border-transparent'
-                  : active
-                    ? 'border-brand-600 text-brand-600 font-medium'
-                    : 'border-transparent text-slate-600 hover:text-slate-800',
+                active
+                  ? 'border-brand-600 text-brand-600 font-medium'
+                  : 'border-transparent text-slate-600 hover:text-slate-800',
               ].join(' ')}
             >
               {tab.label}
@@ -347,6 +368,27 @@ export default function Orders() {
                                   <span className="text-slate-700">
                                     {formatPrice(it.priceInCents)}
                                   </span>
+                                  {(o.status === 'DELIVERED' ||
+                                    o.status === 'COMPLETED') && (
+                                    <button
+                                      onClick={() =>
+                                        setReviewTarget({
+                                          productId: it.productId,
+                                          existing:
+                                            (reviewsByOrder[o.id] ?? []).find(
+                                              (r) => r.productId === it.productId,
+                                            ) ?? null,
+                                        })
+                                      }
+                                      className="text-xs text-brand-600 hover:underline"
+                                    >
+                                      {(reviewsByOrder[o.id] ?? []).some(
+                                        (r) => r.productId === it.productId,
+                                      )
+                                        ? '编辑评价'
+                                        : '写评价'}
+                                    </button>
+                                  )}
                                 </li>
                               ))}
                             </ul>
@@ -410,6 +452,27 @@ export default function Orders() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Phase D — review modal for a line item */}
+      {reviewTarget && expandedId && (
+        <ReviewModal
+          orderId={expandedId}
+          productId={reviewTarget.productId}
+          existing={reviewTarget.existing}
+          onClose={() => setReviewTarget(null)}
+          onSuccess={async () => {
+            setReviewTarget(null)
+            if (expandedId) {
+              listOrderReviews(expandedId)
+                .then((r) =>
+                  setReviewsByOrder((p) => ({ ...p, [expandedId]: r })),
+                )
+                .catch(() => {})
+            }
+            await load()
+          }}
+        />
       )}
     </div>
   )
