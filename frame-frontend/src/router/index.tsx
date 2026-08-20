@@ -7,6 +7,7 @@ import Register from '@/pages/Register'
 import ForgotPassword from '@/pages/ForgotPassword'
 import Dashboard from '@/pages/Dashboard'
 import Products from '@/pages/Products'
+import ProductDetailPage from '@/pages/ProductDetailPage'
 import Checkout from '@/pages/Checkout'
 import Orders from '@/pages/Orders'
 import Admin from '@/pages/Admin'
@@ -18,6 +19,7 @@ const routes: RouteObject[] = [
   { path: '/forgot-password', element: <ForgotPassword /> },
   // Public catalog browse (UC000: guests may browse/search/sort). Add-to-cart stays protected.
   { path: '/products', element: <Products /> },
+  { path: '/products/:id', element: <ProductDetailPage /> },
   {
     path: '/',
     element: (
