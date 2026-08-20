@@ -6,6 +6,7 @@ USE frame_db;
 
 DROP TABLE IF EXISTS `operation_log`;
 DROP TABLE IF EXISTS `order_item`;
+DROP TABLE IF EXISTS `review`;
 DROP TABLE IF EXISTS `orders`;
 DROP TABLE IF EXISTS `product`;
 DROP TABLE IF EXISTS `user`;
@@ -60,6 +61,22 @@ CREATE TABLE `product` (
     PRIMARY KEY (`id`),
     KEY `idx_product_category` (`category`),
     KEY `idx_product_flash` (`is_flash_sale`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `review` (
+    `id`              BIGINT       NOT NULL AUTO_INCREMENT,
+    `order_id`        BIGINT       NOT NULL,
+    `user_id`         BIGINT       NOT NULL,
+    `product_id`      BIGINT       NOT NULL,
+    `quality_stars`   TINYINT      NOT NULL,
+    `logistics_stars` TINYINT      NOT NULL,
+    `service_stars`   TINYINT      NOT NULL,
+    `content`         TEXT,
+    `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_review_order` (`order_id`),
+    KEY `idx_review_product` (`product_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `orders` (
