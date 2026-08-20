@@ -1,6 +1,5 @@
 package com.iflytek.frame.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iflytek.frame.common.OrderStatus;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.ReviewCreateRequest;
@@ -41,7 +40,7 @@ class ReviewServiceImplTest {
     @BeforeEach
     void setUp() {
         reviewService = new ReviewServiceImpl(reviewMapper, orderItemMapper, orderService,
-                coinServiceStub, new ObjectMapper());
+                coinServiceStub);
     }
 
     private Order deliveredOrder() {

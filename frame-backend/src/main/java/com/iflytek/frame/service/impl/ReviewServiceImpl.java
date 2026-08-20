@@ -35,7 +35,13 @@ public class ReviewServiceImpl implements ReviewService {
     private final OrderItemMapper orderItemMapper;
     private final OrderService orderService;
     private final CoinServiceStub coinServiceStub;
-    private final ObjectMapper objectMapper;
+    /**
+     * Instantiated directly (not injected) because Spring Boot 4 auto-configures a Jackson 3
+     * {@code tools.jackson.databind.ObjectMapper} bean, which is not assignment-compatible with
+     * the Jackson 2 {@code com.fasterxml.jackson.databind.ObjectMapper} this class uses (brought
+     * in transitively by jjwt-jackson). Mirrors {@code OperationLogAspect} / {@code SecurityConfig}.
+     */
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     @Transactional

@@ -43,4 +43,19 @@
         where id = #{id} and status = #{from}
     </update>
 
+    <select id="selectUnreviewedOrders" resultType="com.iflytek.frame.entity.Order">
+        select o.* from orders o
+        where o.user_id = #{userId}
+          and o.status in ('DELIVERED','COMPLETED')
+          and exists (
+            select 1 from order_item oi
+            where oi.order_id = o.id
+              and not exists (
+                select 1 from review r
+                where r.order_id = o.id and r.product_id = oi.product_id
+              )
+          )
+        order by o.create_time desc
+    </select>
+
 </mapper>

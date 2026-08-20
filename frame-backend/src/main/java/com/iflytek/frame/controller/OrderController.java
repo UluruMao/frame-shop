@@ -74,6 +74,12 @@ public class OrderController {
         return Result.success(orderService.listItems(id, SecurityUtils.currentUserId()));
     }
 
+    @Operation(summary = "未评价 tab: delivered/completed orders with unreviewed items")
+    @GetMapping("/unreviewed")
+    public Result<List<Order>> unreviewed() {
+        return Result.success(orderService.listUnreviewedOrders(SecurityUtils.currentUserId()));
+    }
+
     @Operation(summary = "Pay a pending order (mock payment)")
     @PostMapping("/{id}/pay")
     public Result<Order> pay(@PathVariable Long id) {

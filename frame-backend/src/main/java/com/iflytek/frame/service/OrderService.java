@@ -39,4 +39,7 @@ public interface OrderService {
 
     /** Scheduler: auto-complete a DELIVERED order (CAS DELIVERED→COMPLETED). No-op if state changed. */
     void completeOrder(Long id);
+
+    /** 未评价 tab: the user's {DELIVERED, COMPLETED} orders with ≥1 unreviewed line item. */
+    List<Order> listUnreviewedOrders(Long userId);
 }
