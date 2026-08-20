@@ -62,7 +62,9 @@ export default function Products() {
           <option value="price|asc">价格升序</option>
           <option value="price|desc">价格降序</option>
           <option value="sales|desc">销量降序</option>
+          <option value="sales|asc">销量升序</option>
           <option value="rating|desc">评价降序</option>
+          <option value="rating|asc">评价升序</option>
         </select>
       </div>
 
