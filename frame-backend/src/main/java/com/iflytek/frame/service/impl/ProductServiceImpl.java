@@ -1,11 +1,12 @@
 package com.iflytek.frame.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iflytek.frame.common.PageResult;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.ProductDTO;
+import com.iflytek.frame.dto.ProductDetail;
+import com.iflytek.frame.dto.ProductListItem;
 import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.mapper.ProductMapper;
@@ -70,12 +71,53 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public PageResult<Product> page(PageQuery query) {
-        Page<Product> page = new Page<>(query.getCurrent(), query.getSize());
-        LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
-        wrapper.orderByDesc(Product::getCreateTime);
-        IPage<Product> result = mapper.selectPage(page, wrapper);
+    public PageResult<ProductListItem> page(PageQuery query) {
+        // Normalize sortField to the whitelist; anything else → null (XML defaults to create_time).
+        String sf = query.getSortField();
+        if (sf == null || !(sf.equals("price") || sf.equals("sales") || sf.equals("rating"))) {
+            query.setSortField(null);
+        }
+        // Normalize sortOrder → " ASC"/" DESC" (default desc). sortOrderSql is the ONLY ${} in the SQL,
+        // and it's derived from this whitelist — never raw user input (防SQL注入).
+        String so = query.getSortOrder();
+        String sql;
+        if (so != null && so.trim().equalsIgnoreCase("asc")) {
+            sql = " ASC";
+        } else if (so != null && so.trim().equalsIgnoreCase("desc")) {
+            sql = " DESC";
+        } else {
+            sql = " DESC";   // default
+        }
+        query.setSortOrderSql(sql);
+        // Split keyword on comma/space, trim, drop empties.
+        String kw = query.getKeyword();
+        if (kw == null || kw.isBlank()) {
+            query.setKeywords(null);
+        } else {
+            java.util.List<String> terms = new java.util.ArrayList<>();
+            for (String t : kw.split("[,\\s]+")) {
+                String tr = t.trim();
+                if (!tr.isEmpty()) terms.add(tr);
+            }
+            query.setKeywords(terms.isEmpty() ? null : terms);
+        }
+        Page<ProductListItem> page = new Page<>(query.getCurrent(), query.getSize());
+        IPage<ProductListItem> result = mapper.pageProducts(page, query);
         return PageResult.of(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+    }
+
+    @Override
+    public ProductDetail getDetail(Long id) {
+        ProductDetail d = mapper.findDetailById(id);
+        if (d == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "product not found: " + id);
+        }
+        return d;
+    }
+
+    @Override
+    public java.util.List<String> listCategories() {
+        return mapper.selectDistinctCategories();
     }
 
     @Override
