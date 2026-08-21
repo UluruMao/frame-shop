@@ -23,4 +23,8 @@ public class CheckoutRequest {
     private String paymentMethod;   // WECHAT/ALIPAY/BANK_CARD — validated in the service
     @NotBlank(message = "idempotencyKey required")
     private String idempotencyKey;
+    /** UC005: if true, deduct `coinAmount` coins at checkout. */
+    private Boolean useCoins;
+    /** UC005: number of coins to spend (100 coins = ¥1). Validated + clamped server-side. */
+    private Integer coinAmount;
 }

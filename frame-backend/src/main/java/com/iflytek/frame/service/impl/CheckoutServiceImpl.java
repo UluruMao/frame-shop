@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.CheckoutRequest;
 import com.iflytek.frame.dto.CheckoutResponse;
+import com.iflytek.frame.dto.CoinDiscountPreview;
 import com.iflytek.frame.dto.OrderItemDTO;
 import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.mapper.ProductMapper;
 import com.iflytek.frame.service.CheckoutService;
+import com.iflytek.frame.service.CoinService;
 import com.iflytek.frame.service.StockGateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +52,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final StringRedisTemplate redis;
     private final StockGateService stockGateService;
     private final ProductMapper productMapper;
+    private final CoinService coinService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -89,6 +92,25 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new BusinessException(ResultCode.NOT_FOUND, "one or more products not found");
         }
 
+        // 2c. UC005/UC012: validate the coin-discount request BEFORE the stock gate (fail fast).
+        int validatedCoinAmount = 0;
+        boolean useCoins = Boolean.TRUE.equals(request.getUseCoins());
+        if (useCoins) {
+            CoinDiscountPreview preview =
+                    coinService.previewCheckoutDiscount(userId, products, qtyByProduct);
+            if (!Boolean.TRUE.equals(preview.getEligible())) {
+                throw new BusinessException(ResultCode.PARAM_INVALID, preview.getReason());
+            }
+            int requested = request.getCoinAmount() == null ? 0 : request.getCoinAmount();
+            if (requested <= 0) {
+                throw new BusinessException(ResultCode.PARAM_INVALID, "coin amount must be positive");
+            }
+            if (requested > preview.getUsable()) {
+                throw new BusinessException(ResultCode.PARAM_INVALID, "coin amount exceeds allowed discount");
+            }
+            validatedCoinAmount = requested;
+        }
+
         // 2b. One-per-user check (spec §6 step 3): reject users who already purchased.
         for (Long pid : qtyByProduct.keySet()) {
             if (Boolean.TRUE.equals(redis.hasKey("seckill:" + pid + ":" + userId))) {
@@ -124,7 +146,7 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         // 5. LPUSH to orders:pending + set order_status = queued, return 202.
         Long orderId = ORDER_SEQ.incrementAndGet();
-        String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct);
+        String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct, useCoins, validatedCoinAmount);
         redis.opsForList().leftPush("orders:pending", payload);
         redis.opsForValue().set("order_status:" + orderId, "queued");
         return new CheckoutResponse(orderId, "queued");
@@ -136,7 +158,7 @@ public class CheckoutServiceImpl implements CheckoutService {
      * without re-fetching from the DB (except for the DB-backstop stock decrement).
      */
     private String jsonPayload(Long orderId, Long userId, CheckoutRequest req,
-                                int total, Map<Long, Integer> items) {
+                                int total, Map<Long, Integer> items, boolean useCoins, int coinAmount) {
         try {
             var node = objectMapper.createObjectNode();
             node.put("orderId", orderId);
@@ -148,6 +170,8 @@ public class CheckoutServiceImpl implements CheckoutService {
             node.put("shippingAddress", req.getShippingAddress());
             node.put("totalInCents", total);
             node.put("idempotencyKey", req.getIdempotencyKey());
+            node.put("useCoins", useCoins);
+            node.put("coinAmount", coinAmount);
             var itemsNode = node.putArray("items");
             items.forEach((pid, qty) -> {
                 var i = itemsNode.addObject();
