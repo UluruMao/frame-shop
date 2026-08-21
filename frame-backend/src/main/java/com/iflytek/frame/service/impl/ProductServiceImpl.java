@@ -101,9 +101,56 @@ public class ProductServiceImpl implements ProductService {
             }
             query.setKeywords(terms.isEmpty() ? null : terms);
         }
+        // ---- list cache (read-through) ----
+        // Key built from the NORMALIZED query so logically-identical queries share a key.
+        String cacheKey = listCacheKey(query);
+        String cached = null;
+        try {
+            cached = redis.opsForValue().get(cacheKey);
+        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
+            log.warn("Redis list-cache read failed for key {} — falling through to DB: {}", cacheKey, e.getMessage());
+        }
+        if (cached != null) {
+            try {
+                return objectMapper.readValue(cached,
+                        objectMapper.getTypeFactory().constructParametricType(
+                                com.iflytek.frame.common.PageResult.class,
+                                com.iflytek.frame.dto.ProductListItem.class));
+            } catch (Exception e) {
+                log.warn("List-cache deserialization failed for key {} — falling through to DB: {}", cacheKey, e.getMessage());
+            }
+        }
         Page<ProductListItem> page = new Page<>(query.getCurrent(), query.getSize());
         IPage<ProductListItem> result = mapper.pageProducts(page, query);
-        return PageResult.of(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+        PageResult<ProductListItem> pr = PageResult.of(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+        try {
+            redis.opsForValue().set(cacheKey, objectMapper.writeValueAsString(pr), CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+            redis.opsForSet().add("products:page:keys", cacheKey);
+        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
+            log.warn("Redis list-cache write failed for key {}: {}", cacheKey, e.getMessage());
+        }
+        return pr;
+    }
+
+    /** Deterministic cache key from the normalized PageQuery (post-normalization). */
+    private String listCacheKey(PageQuery query) {
+        String normalized = query.getCurrent() + "|" + query.getSize()
+                + "|" + query.getSortField() + "|" + query.getSortOrderSql()
+                + "|" + query.getCategory() + "|" + query.getKeywords();
+        return "products:page:" + Integer.toHexString(normalized.hashCode());
+    }
+
+    /** Invalidate the entire product list cache (on any product mutation). */
+    private void invalidateListCache() {
+        try {
+            var keys = redis.opsForSet().members("products:page:keys");
+            if (keys != null && !keys.isEmpty()) {
+                redis.delete(java.util.List.copyOf(keys));
+            }
+            redis.delete("products:page:keys");
+        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
+            log.warn("Redis list-cache invalidation failed (non-fatal): {}", e.getMessage());
+        }
     }
 
     @Override
@@ -124,6 +171,7 @@ public class ProductServiceImpl implements ProductService {
     public Product create(ProductDTO dto) {
         Product p = dto.toEntity();
         mapper.insert(p);
+        invalidateListCache();
         return p;
     }
 
@@ -144,6 +192,7 @@ public class ProductServiceImpl implements ProductService {
         if (Boolean.TRUE.equals(redis.hasKey("stock:" + id))) {
             stockGateService.loadStock(id);
         }
+        invalidateListCache();
         return existing;
     }
 
@@ -152,6 +201,7 @@ public class ProductServiceImpl implements ProductService {
         getById(id);
         mapper.deleteById(id);
         redis.delete("product:" + id);
+        invalidateListCache();
     }
 
     @Override
@@ -171,6 +221,7 @@ public class ProductServiceImpl implements ProductService {
         String imageUrl = "/uploads/" + filename;
         mapper.updateImageUrl(id, imageUrl);
         redis.delete("product:" + id);
+        invalidateListCache();
         return imageUrl;
     }
 }

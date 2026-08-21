@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import tools.jackson.databind.ObjectMapper;
@@ -29,6 +30,7 @@ class ProductServiceImplTest {
     @Mock ProductMapper productMapper;
     @Mock StringRedisTemplate redis;
     @Mock ValueOperations<String, String> valueOps;
+    @Mock SetOperations<String, String> setOps;
     @InjectMocks ProductServiceImpl productService;
 
     @BeforeEach
@@ -42,6 +44,11 @@ class ProductServiceImplTest {
         // InvalidDefinitionException — exactly the production HTTP 500.
         ObjectMapper prodLike = new ObjectMapper();
         org.springframework.test.util.ReflectionTestUtils.setField(productService, "objectMapper", prodLike);
+        // page() now uses both opsForValue (read/write the list cache) and opsForSet
+        // (track live list-cache keys for invalidation). Stub both so the mock-backed
+        // page_* tests don't NPE on the unstubbed SetOperations.
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(redis.opsForSet()).thenReturn(setOps);
     }
 
     @Test
