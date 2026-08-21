@@ -1,5 +1,6 @@
 package com.iflytek.frame.websocket;
 
+import com.iflytek.frame.common.Role;
 import com.iflytek.frame.security.JwtUtil;
 import com.iflytek.frame.security.SecurityUser;
 import io.jsonwebtoken.Claims;
@@ -13,6 +14,8 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -77,5 +80,35 @@ class AuthChannelInterceptorTest {
         Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
         Message<?> result = interceptor.preSend(msg, channel);
         assertSame(msg, result);
+    }
+
+    @Test
+    void disconnect_adminPrincipal_decrementsPresence() {
+        Long adminId = 7L;
+        SecurityUser admin = new SecurityUser(adminId, "admin", Role.ADMIN,
+                List.of(new SecurityUser.Authority("ROLE_ADMIN")));
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.DISCONNECT);
+        // principal is stamped on CONNECT in the real pipeline; a DISCONNECT with the
+        // principal already attached is the case afterSendCompletion must handle.
+        accessor.setLeaveMutable(true);
+        accessor.setUser(admin);
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        interceptor.afterSendCompletion(msg, channel, true, null);
+
+        verify(presenceRegistry).onAdminDisconnect(adminId);
+    }
+
+    @Test
+    void disconnect_noPrincipal_isNoOp() {
+        // DISCONNECT frame carrying no principal (the likely real case — Spring STOMP
+        // does not always propagate the principal onto the DISCONNECT frame). The
+        // decrement must be skipped, not throw.
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.DISCONNECT);
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        interceptor.afterSendCompletion(msg, channel, true, null);
+
+        verify(presenceRegistry, never()).onAdminDisconnect(any());
     }
 }
