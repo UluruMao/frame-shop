@@ -48,6 +48,7 @@ function order(overrides: Partial<Order> = {}): Order {
     customerEmail: 'test@example.com',
     shippingAddress: '123 St',
     totalInCents: 2500,
+    paidInCents: 2500,
     status: 'PENDING',
     idempotencyKey: 'abc',
     ...overrides,
