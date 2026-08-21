@@ -83,7 +83,7 @@ export default function ReviewModal({ orderId, productId, existing, onClose, onS
             <div className="mt-1 flex flex-wrap gap-1">
               {imageUrls.map((u, i) => (
                 <div key={i} className="relative">
-                  <img src={u} alt="" className="h-12 w-12 rounded object-cover" />
+                  <img src={u} alt="" loading="lazy" className="h-12 w-12 rounded object-cover" />
                   <button
                     type="button"
                     className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1 text-xs text-white"
