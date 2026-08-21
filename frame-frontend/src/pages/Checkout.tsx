@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShoppingCart, Loader2, CheckCircle2, XCircle, CreditCard, RotateCw } from 'lucide-react'
 import { checkout, getOrder, payOrder } from '@/api/order'
+import { getCoinBalance } from '@/api/coin'
 import type { Order, OrderStatus, PaymentMethod } from '@/api/types'
 import { useCart } from '@/store/CartContext'
 import { formatPrice } from './Products'
@@ -61,6 +62,19 @@ export default function Checkout() {
   const [order, setOrder] = useState<Order | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [paying, setPaying] = useState(false)
+
+  // UC012 coin-spend state (checkout form only). Disabled for flash-sale carts.
+  const [coinBalance, setCoinBalance] = useState(0)
+  const [useCoins, setUseCoins] = useState(false)
+  const [coinAmount, setCoinAmount] = useState(0)
+  const hasFlash = items.some((i) => i.isFlashSale)
+  const subtotalCents = totalCents
+  const maxCoins = Math.floor((subtotalCents / 2) / 100) * 100 // 50% cap, 100-coin granularity
+  const usableCoins = Math.min(maxCoins, Math.floor(coinBalance / 100) * 100)
+  // CORRECTED: coins map 1:1 to cents (100 coins = ¥1 = 100 cents), so
+  // coinAmount coins = coinAmount cents of discount — NOT Math.floor(coinAmount / 100).
+  const coinDiscountCents = useCoins ? coinAmount : 0
+  const paidCents = subtotalCents - coinDiscountCents
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // Guards the poll callback against firing after the stage has transitioned
   // away from 'queued' (e.g. a queued interval tick that lands after the
@@ -75,6 +89,15 @@ export default function Checkout() {
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [])
+
+  // UC012: fetch the user's coin balance once the checkout form mounts, so the
+  // coins UI can show the balance + cap the spendable amount. Failures (e.g. not
+  // logged in) silently leave the balance at 0 → checkbox stays disabled.
+  useEffect(() => {
+    if (stage === 'form') {
+      getCoinBalance().then((b) => setCoinBalance(b.balance)).catch(() => {})
+    }
+  }, [stage])
 
   // Stage 2: poll getOrder until the consumer resolves the order.
   useEffect(() => {
@@ -137,6 +160,8 @@ export default function Checkout() {
         customerPhone,
         paymentMethod,
         idempotencyKey: crypto.randomUUID(),
+        useCoins: useCoins && coinAmount > 0,
+        coinAmount: useCoins ? coinAmount : 0,
       })
       setOrderId(res.orderId)
       setStage('queued')
@@ -259,6 +284,42 @@ export default function Checkout() {
             </div>
           </div>
 
+          <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+            <h2 className="text-sm font-medium text-slate-700">金币 (UC012)</h2>
+            {hasFlash ? (
+              <p className="text-xs text-slate-500">折扣商品无法使用金币</p>
+            ) : (
+              <>
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    aria-label="使用金币"
+                    checked={useCoins}
+                    onChange={(e) => { setUseCoins(e.target.checked); if (!e.target.checked) setCoinAmount(0) }}
+                    disabled={coinBalance < 100}
+                  />
+                  使用金币 (余额 {coinBalance}, 最多抵 {usableCoins} 颗 = ¥{(usableCoins / 100).toFixed(2)})
+                </label>
+                {useCoins && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-slate-600">抵扣金币数</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={usableCoins}
+                      step={100}
+                      aria-label="抵扣金币数"
+                      className="w-24 px-2 py-1 rounded border border-slate-300"
+                      value={coinAmount}
+                      onChange={(e) => setCoinAmount(Math.min(Number(e.target.value), usableCoins))}
+                    />
+                    <span className="text-slate-500">优惠 ¥{(coinDiscountCents / 100).toFixed(2)}，实付 ¥{(paidCents / 100).toFixed(2)}</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button
@@ -318,8 +379,8 @@ export default function Checkout() {
                     <StatusBadge status={order.status} />
                   </div>
                   <div className="flex justify-between border-t border-slate-100 mt-2 pt-2 font-medium">
-                    <span className="text-slate-800">Total</span>
-                    <span className="text-slate-900">{formatPrice(order.totalInCents)}</span>
+                    <span className="text-slate-800">实付</span>
+                    <span className="text-slate-900">{formatPrice(order.paidInCents || order.totalInCents)}</span>
                   </div>
                 </div>
               </div>
@@ -332,7 +393,7 @@ export default function Checkout() {
                 className="w-full py-2.5 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 <CreditCard className="w-4 h-4" />
-                {paying ? 'Processing…' : `Pay ${formatPrice(order.totalInCents)}`}
+                {paying ? 'Processing…' : `Pay ${formatPrice(order.paidInCents || order.totalInCents)}`}
               </button>
             </div>
           ) : null}

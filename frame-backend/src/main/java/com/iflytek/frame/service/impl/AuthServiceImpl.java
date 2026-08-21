@@ -7,13 +7,16 @@ import com.iflytek.frame.entity.User;
 import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.security.JwtUtil;
 import com.iflytek.frame.service.AuthService;
+import com.iflytek.frame.service.CoinService;
 import com.iflytek.frame.service.LoginAttemptService;
 import com.iflytek.frame.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
@@ -21,6 +24,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final UserService userService;
     private final LoginAttemptService loginAttemptService;
+    private final CoinService coinService;
 
     @Override
     public LoginResponse login(LoginRequest request) {
@@ -37,6 +41,11 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ResultCode.BAD_CREDENTIALS, "bad credentials");
         }
         loginAttemptService.recordSuccess(user.getId());
+        try {
+            coinService.awardDailyLogin(user.getId());
+        } catch (Exception e) {
+            log.warn("awardDailyLogin({}) failed: {}", user.getId(), e.getMessage());
+        }
         String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole());
         return new LoginResponse(token, "Bearer", jwtUtil.getExpireSeconds(),
                 user.getId(), user.getUsername(), user.getRole().name());

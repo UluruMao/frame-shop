@@ -91,6 +91,7 @@ public class StreamConsumerService {
     private final OrderItemMapper orderItemMapper;
     private final ProductMapper productMapper;
     private final StockGateService stockGateService;
+    private final CoinService coinService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Thread pool for parallel order processing — bounded by HikariCP pool (max 50).
@@ -120,12 +121,14 @@ public class StreamConsumerService {
                                   OrderMapper orderMapper,
                                   OrderItemMapper orderItemMapper,
                                   ProductMapper productMapper,
-                                  StockGateService stockGateService) {
+                                  StockGateService stockGateService,
+                                  CoinService coinService) {
         this.redis = redis;
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.productMapper = productMapper;
         this.stockGateService = stockGateService;
+        this.coinService = coinService;
     }
 
     @Autowired
@@ -211,6 +214,8 @@ public class StreamConsumerService {
         String paymentMethod;
         String shippingAddress;
         JsonNode itemsNode;
+        boolean useCoins;
+        int coinAmount;
 
         try {
             JsonNode node = objectMapper.readTree(payload);
@@ -227,6 +232,12 @@ public class StreamConsumerService {
             JsonNode payNode = node.get("paymentMethod");
             paymentMethod = payNode != null && !payNode.isNull() ? payNode.asText() : null;
             shippingAddress = node.get("shippingAddress").asText();
+            // UC005: useCoins/coinAmount are Phase E additions — tolerate their absence
+            // (a payload queued before the coin branch existed) by null-checking the node.
+            JsonNode useCoinsNode = node.get("useCoins");
+            useCoins = useCoinsNode != null && !useCoinsNode.isNull() && useCoinsNode.asBoolean();
+            JsonNode coinAmountNode = node.get("coinAmount");
+            coinAmount = coinAmountNode != null && !coinAmountNode.isNull() ? coinAmountNode.asInt() : 0;
             itemsNode = node.get("items");
         } catch (Exception parseEx) {
             log.error("poison payload: unparseable, skipping", parseEx);
@@ -246,6 +257,15 @@ public class StreamConsumerService {
             order.setTotalInCents(totalInCents);
             order.setStatus(OrderStatus.PENDING);
             order.setIdempotencyKey(idempotencyKey);
+            // UC005: record the post-discount paid amount on the row BEFORE insert (atomic with the
+            // order row). The consumer's @Transactional coin deduction runs AFTER the stock backstop
+            // succeeds, so a FAILED order (coins never spent) still persists paidInCents — but FAILED
+            // orders are never paid, so paidInCents is informational there. Coins map 1:1 to cents
+            // (100 coins = ¥1 = 100 cents — see CoinServiceImpl.COINS_PER_YUAN + awardReviewReward's
+            // paidInCents/100), so the discount in cents equals the coin amount directly.
+            int coinDiscountCents = (useCoins && coinAmount > 0) ? coinAmount : 0;
+            int paidInCents = totalInCents - coinDiscountCents;
+            order.setPaidInCents(paidInCents);
 
             try {
                 orderMapper.insert(order);
@@ -289,6 +309,65 @@ public class StreamConsumerService {
                 orderItemMapper.insert(oi);
                 redis.opsForValue().set("seckill:" + pid + ":" + userId, "1",
                         3600, TimeUnit.SECONDS);
+            }
+
+            // UC005: deduct coins atomically with the order (only if the order will actually exist —
+            // the stock backstop above already succeeded, so the order is durable). spendAtCheckout
+            // runs FIFO inside this @Transactional method; on a narrow insufficient-coins race it
+            // throws BusinessException(CONFLICT). That rolls back the consumer tx (no Order row, no
+            // OrderItems, no DB-stock decrement) AND we must recredit the Redis stock the hot path
+            // Lua-gated + delete the per-item seckill keys the success-loop set — mirroring the
+            // existing stock-failure FAILED path above (recredit + seckill delete per item).
+            //
+            // PRE-CHECK (Finding 2 fix): a @Transactional REQUIRED method throwing a RuntimeException
+            // marks the shared transaction rollback-only BEFORE the catch block runs, so the catch's
+            // FAILED-status write + Redis recredits roll back too (UnexpectedRollbackException) and the
+            // RPOP'd payload is lost. To avoid this in the COMMON insufficient-balance case (not a race),
+            // pre-check via canSpend (a read — no tx marking) BEFORE calling spendAtCheckout. If
+            // canSpend is false, set FAILED + recredit + return WITHOUT calling spendAtCheckout (no
+            // exception, no rollback-only mark). spendAtCheckout's CONFLICT throw remains as the
+            // last-line guard for the narrow race between canSpend and the spend (documented V1
+            // limitation — spec §4c).
+            if (useCoins && coinAmount > 0) {
+                if (!coinService.canSpend(userId, coinAmount)) {
+                    // insufficient spendable coins (common case, not a race) — fail the order,
+                    // recredit DB + Redis stock, delete the per-item seckill keys set during the
+                    // success loop above. NO spendAtCheckout call → no exception → no rollback-only.
+                    order.setStatus(OrderStatus.FAILED);
+                    orderMapper.updateById(order);
+                    for (JsonNode item : itemsNode) {
+                        Long pid = item.get("productId").asLong();
+                        int qty = item.get("quantity").asInt();
+                        stockGateService.recredit(pid, qty);
+                        redis.delete("seckill:" + pid + ":" + userId);
+                    }
+                    redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                            String.valueOf(order.getId()));
+                    redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
+                    return;
+                }
+                try {
+                    coinService.spendAtCheckout(userId, order.getId(), coinAmount);
+                } catch (com.iflytek.frame.exception.BusinessException coinFail) {
+                    if (coinFail.getCode() == com.iflytek.frame.common.ResultCode.CONFLICT.getCode()) {
+                        // narrow race (canSpend passed but a concurrent spend won the FOR UPDATE lock
+                        // first) — the rollback-only behavior persists here (documented V1 limitation).
+                        // Fail the order, recredit DB + Redis stock, delete the per-item seckill keys.
+                        order.setStatus(OrderStatus.FAILED);
+                        orderMapper.updateById(order);
+                        for (JsonNode item : itemsNode) {
+                            Long pid = item.get("productId").asLong();
+                            int qty = item.get("quantity").asInt();
+                            stockGateService.recredit(pid, qty);
+                            redis.delete("seckill:" + pid + ":" + userId);
+                        }
+                        redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                                String.valueOf(order.getId()));
+                        redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
+                        return;
+                    }
+                    throw coinFail;
+                }
             }
             redis.opsForValue().set("order_id_map:" + payloadOrderId,
                     String.valueOf(order.getId()));

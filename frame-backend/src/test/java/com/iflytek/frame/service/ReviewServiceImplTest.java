@@ -10,6 +10,7 @@ import com.iflytek.frame.entity.Review;
 import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.mapper.OrderItemMapper;
 import com.iflytek.frame.mapper.ReviewMapper;
+import com.iflytek.frame.service.CoinService;
 import com.iflytek.frame.service.impl.ReviewServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,13 +35,13 @@ class ReviewServiceImplTest {
     @Mock ReviewMapper reviewMapper;
     @Mock OrderItemMapper orderItemMapper;
     @Mock OrderService orderService;
-    @Mock CoinServiceStub coinServiceStub;
+    @Mock CoinService coinService;
     ReviewServiceImpl reviewService;
 
     @BeforeEach
     void setUp() {
         reviewService = new ReviewServiceImpl(reviewMapper, orderItemMapper, orderService,
-                coinServiceStub);
+                coinService);
     }
 
     private Order deliveredOrder() {
@@ -87,7 +88,7 @@ class ReviewServiceImplTest {
 
         verify(reviewMapper).insert(any(Review.class));
         verify(orderService).completeOrder(7L);
-        verify(coinServiceStub).reviewSubmitted(7L, 1L);
+        verify(coinService).awardReviewReward(7L, 1L);
     }
 
     @Test
@@ -101,7 +102,7 @@ class ReviewServiceImplTest {
         reviewService.create(req(100L), 1L);
 
         verify(orderService, never()).completeOrder(any());
-        verify(coinServiceStub, never()).reviewSubmitted(any(), any());
+        verify(coinService, never()).awardReviewReward(any(), any());
     }
 
     @Test
@@ -118,7 +119,7 @@ class ReviewServiceImplTest {
         verify(reviewMapper, never()).insert(any(Review.class));
         verify(reviewMapper).updateById(any(Review.class));
         verify(orderService, never()).completeOrder(any());
-        verify(coinServiceStub, never()).reviewSubmitted(any(), any());
+        verify(coinService, never()).awardReviewReward(any(), any());
         assertThat(vo.isEdited()).isTrue();
     }
 
@@ -155,7 +156,7 @@ class ReviewServiceImplTest {
 
         // completeOrder is a no-op on an already-COMPLETED order (CAS rows==0) but we still call it.
         verify(orderService).completeOrder(7L);
-        verify(coinServiceStub).reviewSubmitted(7L, 1L);
+        verify(coinService).awardReviewReward(7L, 1L);
     }
 
     private Review stubReview(long pid) {

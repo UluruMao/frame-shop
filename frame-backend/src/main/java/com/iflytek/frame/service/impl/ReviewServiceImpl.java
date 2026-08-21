@@ -13,7 +13,7 @@ import com.iflytek.frame.entity.Review;
 import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.mapper.OrderItemMapper;
 import com.iflytek.frame.mapper.ReviewMapper;
-import com.iflytek.frame.service.CoinServiceStub;
+import com.iflytek.frame.service.CoinService;
 import com.iflytek.frame.service.OrderService;
 import com.iflytek.frame.service.ReviewService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -34,7 +34,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewMapper reviewMapper;
     private final OrderItemMapper orderItemMapper;
     private final OrderService orderService;
-    private final CoinServiceStub coinServiceStub;
+    private final CoinService coinService;
     /**
      * Instantiated directly (not injected) because Spring Boot 4 auto-configures a Jackson 3
      * {@code tools.jackson.databind.ObjectMapper} bean, which is not assignment-compatible with
@@ -85,9 +85,9 @@ public class ReviewServiceImpl implements ReviewService {
                 log.warn("completeOrder({}) failed after review: {}", order.getId(), e.getMessage());
             }
             try {
-                coinServiceStub.reviewSubmitted(order.getId(), userId);
+                coinService.awardReviewReward(order.getId(), userId);
             } catch (Exception e) {
-                log.warn("coinServiceStub.reviewSubmitted({}) failed: {}", order.getId(), e.getMessage());
+                log.warn("coinService.awardReviewReward({}) failed: {}", order.getId(), e.getMessage());
             }
         }
         return toVO(r, items);

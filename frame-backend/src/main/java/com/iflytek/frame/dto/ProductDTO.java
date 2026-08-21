@@ -1,5 +1,6 @@
 package com.iflytek.frame.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.iflytek.frame.entity.Product;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
@@ -23,6 +24,14 @@ public class ProductDTO {
     private Integer stock;
     private String imageUrl;
     private String category;
+    /**
+     * Flash-sale (discount) flag. {@code @JsonProperty("isFlashSale")} forces the JSON property name
+     * to {@code isFlashSale} — without it, Jackson derives {@code flashSale} from Lombok's
+     * {@code is}-prefix getter on this primitive {@code boolean} field, so clients sending
+     * {@code "isFlashSale": true} (the entity field name, used by the frontend + e2e) would silently
+     * bind {@code false}. This keeps the wire name aligned with {@link Product#isFlashSale}.
+     */
+    @JsonProperty("isFlashSale")
     private boolean isFlashSale;
     private LocalDateTime flashSaleAt;
     private String description;

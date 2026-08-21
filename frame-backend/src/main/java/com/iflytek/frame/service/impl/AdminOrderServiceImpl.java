@@ -33,6 +33,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
     private final OrderMapper orderMapper;
     private final OrderStockReleaseService orderStockReleaseService;
+    private final com.iflytek.frame.service.CoinService coinService;
 
     @Override
     public PageResult<Order> listOrders(PageQuery q, OrderStatus status) {
@@ -89,6 +90,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         // The item is now confirmed returned — recredit the stock.
         o.setStatus(OrderStatus.REFUNDED);
         orderStockReleaseService.release(o);
+        try {
+            coinService.refundCoins(id);
+        } catch (Exception e) {
+            log.warn("refundCoins({}) failed after approve-refund: {}", id, e.getMessage());
+        }
     }
 
     @Override

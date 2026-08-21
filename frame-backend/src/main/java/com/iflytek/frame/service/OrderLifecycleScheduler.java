@@ -32,6 +32,7 @@ public class OrderLifecycleScheduler {
     private static final Logger log = LoggerFactory.getLogger(OrderLifecycleScheduler.class);
     private final OrderMapper orderMapper;
     private final OrderService orderService;   // for releaseOrderStock on expiry
+    private final CoinService coinService;     // UC012 §3: daily expiry sweep
 
     @Value("${frame.order.expire-minutes:30}")
     private int expireMinutes;
@@ -72,6 +73,16 @@ public class OrderLifecycleScheduler {
             }
         } catch (Exception e) {
             log.warn("autoCompleteOrders tick failed: {}", e.getMessage());
+        }
+    }
+
+    /** UC012 §3: daily sweep of coins past their 30-day clock (4:01am CST, off the :00 herd). */
+    @Scheduled(cron = "1 1 4 * * *")
+    public void sweepExpiredCoins() {
+        try {
+            coinService.sweepExpiredCredits();
+        } catch (Exception e) {
+            log.error("sweepExpiredCoins failed", e);
         }
     }
 }

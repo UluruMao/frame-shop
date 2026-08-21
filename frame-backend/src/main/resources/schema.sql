@@ -7,6 +7,7 @@ USE frame_db;
 DROP TABLE IF EXISTS `operation_log`;
 DROP TABLE IF EXISTS `order_item`;
 DROP TABLE IF EXISTS `review`;
+DROP TABLE IF EXISTS `coin_ledger`;
 DROP TABLE IF EXISTS `orders`;
 DROP TABLE IF EXISTS `product`;
 DROP TABLE IF EXISTS `user`;
@@ -89,6 +90,7 @@ CREATE TABLE `orders` (
     `customer_email` VARCHAR(128) NOT NULL,
     `shipping_address` VARCHAR(256) NOT NULL,
     `total_in_cents` INT          NOT NULL,
+    `paid_in_cents`  INT          NOT NULL DEFAULT 0,
     `status`         VARCHAR(16)  NOT NULL DEFAULT 'PENDING',
     `idempotency_key` VARCHAR(64) NOT NULL,
     `customer_phone`   VARCHAR(20)  DEFAULT NULL,
@@ -121,6 +123,29 @@ CREATE TABLE `order_item` (
     PRIMARY KEY (`id`),
     KEY `idx_order_item_order` (`order_id`),
     KEY `idx_order_item_product` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `coin_ledger` (
+    `id`            BIGINT       NOT NULL AUTO_INCREMENT,
+    `user_id`       BIGINT       NOT NULL,
+    `amount`        INT          NOT NULL,
+    `balance_after` INT          NOT NULL,
+    `source`        VARCHAR(32)  NOT NULL,
+    `ref_order_id`  BIGINT       DEFAULT NULL,
+    `ref_credit_id` BIGINT       DEFAULT NULL,
+    `ref_credit_expires_at` DATETIME DEFAULT NULL, -- snapshot of the consumed credit's expires_at (for refundCoins to restore)
+    `idem_key`      VARCHAR(64)  DEFAULT NULL,
+    `login_date`    DATE         DEFAULT NULL,
+    `expires_at`    DATETIME     DEFAULT NULL,
+    `create_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_coin_idem` (`idem_key`),
+    UNIQUE KEY `uk_coin_daily` (`user_id`, `login_date`),
+    KEY `idx_coin_user` (`user_id`),
+    KEY `idx_coin_user_expires` (`user_id`, `expires_at`),
+    KEY `idx_coin_expire` (`expires_at`),
+    KEY `idx_coin_order` (`ref_order_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `user` (`username`, `password_hash`, `role`, `phone`) VALUES

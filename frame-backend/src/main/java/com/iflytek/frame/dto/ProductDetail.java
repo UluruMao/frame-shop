@@ -1,5 +1,6 @@
 package com.iflytek.frame.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -18,6 +19,14 @@ public class ProductDetail {
     private Integer stock;
     private String imageUrl;
     private String category;
+    /**
+     * Flash-sale (discount) flag. {@code @JsonProperty("isFlashSale")} forces the JSON property name
+     * to {@code isFlashSale} — without it, Jackson derives {@code flashSale} from Lombok's
+     * {@code is}-prefix getter. The frontend reads {@code detail.isFlashSale} (see
+     * {@code ProductDetailPage.tsx}) → would be {@code undefined} without this. Mirrors the
+     * {@link Product}, {@link ProductDTO}, and {@link ProductListItem} fixes.
+     */
+    @JsonProperty("isFlashSale")
     private boolean isFlashSale;
     private LocalDateTime flashSaleAt;
     private String description;

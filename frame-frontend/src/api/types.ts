@@ -133,6 +133,24 @@ export interface ReviewUpdateRequest {
   isAnonymous?: boolean
 }
 
+/** UC012 coin balance + daily-claim status (mirrors backend CoinBalanceVO). */
+export interface CoinBalance {
+  balance: number
+  claimedToday: boolean
+  expiringSoon: number
+}
+
+/** UC012 a coin ledger row (mirrors backend CoinHistoryVO). */
+export interface CoinHistoryRow {
+  id: number
+  amount: number
+  source: string
+  refOrderId?: number
+  expiresAt?: string
+  createTime: string
+  balanceAfter: number
+}
+
 export type OrderStatus =
   | 'PENDING'
   | 'PAID'
@@ -157,6 +175,8 @@ export interface Order {
   customerEmail: string
   shippingAddress: string
   totalInCents: number
+  /** Actual amount paid after coin discount (UC005/UC012). */
+  paidInCents: number
   status: OrderStatus
   idempotencyKey: string
   /** Phone captured at checkout for SMS-gated flows (UC001/015). */
@@ -195,6 +215,10 @@ export interface CheckoutRequest {
   customerPhone: string
   /** Payment channel (required — drives the mock payment flow). */
   paymentMethod: PaymentMethod
+  /** UC005: if true, deduct `coinAmount` coins at checkout. */
+  useCoins?: boolean
+  /** UC005: coins to spend (100 = ¥1). Validated/clamped server-side. */
+  coinAmount?: number
 }
 
 /**
