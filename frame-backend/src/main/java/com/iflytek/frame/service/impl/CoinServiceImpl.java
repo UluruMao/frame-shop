@@ -1,0 +1,253 @@
+package com.iflytek.frame.service.impl;
+
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.iflytek.frame.common.CoinSource;
+import com.iflytek.frame.common.PageResult;
+import com.iflytek.frame.common.ResultCode;
+import com.iflytek.frame.dto.CoinBalanceVO;
+import com.iflytek.frame.dto.CoinDiscountPreview;
+import com.iflytek.frame.dto.CoinHistoryVO;
+import com.iflytek.frame.entity.CoinLedger;
+import com.iflytek.frame.entity.Order;
+import com.iflytek.frame.entity.Product;
+import com.iflytek.frame.exception.BusinessException;
+import com.iflytek.frame.mapper.CoinMapper;
+import com.iflytek.frame.mapper.OrderMapper;
+import com.iflytek.frame.service.CoinService;
+import com.iflytek.frame.util.PageQuery;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class CoinServiceImpl implements CoinService {
+
+    private static final ZoneId CST = ZoneId.of("Asia/Shanghai");
+    private static final int COINS_PER_YUAN = 100;
+    private static final int EXPIRY_DAYS = 30;
+
+    private final CoinMapper coinMapper;
+    private final OrderMapper orderMapper;
+
+    @Override
+    @Transactional
+    public void awardDailyLogin(Long userId) {
+        LocalDate today = LocalDate.now(CST);
+        if (coinMapper.selectDailyLogin(userId, today) != null) {
+            return; // already claimed today
+        }
+        int balance = currentBalance(userId);
+        CoinLedger row = new CoinLedger();
+        row.setUserId(userId);
+        row.setAmount(100);
+        row.setBalanceAfter(balance + 100);
+        row.setSource(CoinSource.DAILY_LOGIN);
+        row.setLoginDate(today);
+        row.setExpiresAt(LocalDateTime.now().plusDays(EXPIRY_DAYS));
+        try {
+            coinMapper.insert(row);
+        } catch (DataIntegrityViolationException e) {
+            // two concurrent logins same instant — the other won; this is a no-op
+            log.debug("awardDailyLogin({}) duplicate-key no-op: {}", userId, e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public void awardReviewReward(Long orderId, Long userId) {
+        Order o = orderMapper.selectById(orderId);
+        if (o == null || !o.getUserId().equals(userId)) {
+            return; // ownership/missing — silently no-op (caller's try/catch isolates)
+        }
+        int rewardCoins = o.getPaidInCents() / COINS_PER_YUAN; // yuan, floor
+        if (rewardCoins <= 0) {
+            log.debug("awardReviewReward({}) no-op: paidInCents={} → 0 coins", orderId, o.getPaidInCents());
+            return;
+        }
+        int balance = currentBalance(userId);
+        CoinLedger row = new CoinLedger();
+        row.setUserId(userId);
+        row.setAmount(rewardCoins);
+        row.setBalanceAfter(balance + rewardCoins);
+        row.setSource(CoinSource.REVIEW_REWARD);
+        row.setRefOrderId(orderId);
+        row.setIdemKey("review:" + orderId);
+        row.setExpiresAt(LocalDateTime.now().plusDays(EXPIRY_DAYS));
+        try {
+            coinMapper.insert(row);
+        } catch (DataIntegrityViolationException e) {
+            // concurrent double-fire (the Phase D flag) — idempotent no-op
+            log.debug("awardReviewReward({}) duplicate-key no-op: {}", orderId, e.getMessage());
+        }
+    }
+
+    @Override
+    public CoinDiscountPreview previewCheckoutDiscount(Long userId, List<Product> products, Map<Long, Integer> qtyByProduct) {
+        CoinDiscountPreview p = new CoinDiscountPreview();
+        boolean hasFlash = products.stream().anyMatch(pr -> Boolean.TRUE.equals(pr.isFlashSale()));
+        if (hasFlash) {
+            p.setEligible(false);
+            p.setMaxCoins(0);
+            p.setBalance(currentBalance(userId));
+            p.setUsable(0);
+            p.setReason("coins cannot be used on flash-sale items");
+            return p;
+        }
+        int subtotalCents = 0;
+        Map<Long, Product> byId = new java.util.HashMap<>();
+        for (Product pr : products) {
+            byId.put(pr.getId(), pr);
+        }
+        for (Map.Entry<Long, Integer> e : qtyByProduct.entrySet()) {
+            subtotalCents += byId.get(e.getKey()).getPriceInCents() * e.getValue();
+        }
+        int maxDiscountCents = subtotalCents / 2; // 50% cap
+        int maxCoins = (maxDiscountCents / COINS_PER_YUAN) * COINS_PER_YUAN; // 100-coin granularity
+        int balance = currentBalance(userId);
+        int usable = Math.min(maxCoins, (balance / COINS_PER_YUAN) * COINS_PER_YUAN); // floored to 100
+        p.setEligible(true);
+        p.setMaxCoins(maxCoins);
+        p.setBalance(balance);
+        p.setUsable(usable);
+        p.setReason(null);
+        return p;
+    }
+
+    @Override
+    @Transactional
+    public void spendAtCheckout(Long userId, Long orderId, int coinAmount) {
+        if (coinAmount <= 0) {
+            return;
+        }
+        List<CoinLedger> credits = coinMapper.selectSpendableCreditsForUpdate(userId); // FOR UPDATE, FIFO
+        int remaining = coinAmount;
+        int balance = currentBalance(userId);
+        for (CoinLedger credit : credits) {
+            if (remaining <= 0) {
+                break;
+            }
+            int take = Math.min(credit.getAmount(), remaining);
+            balance -= take;
+            CoinLedger spend = new CoinLedger();
+            spend.setUserId(userId);
+            spend.setAmount(-take);
+            spend.setBalanceAfter(balance);
+            spend.setSource(CoinSource.CHECKOUT_SPEND);
+            spend.setRefOrderId(orderId);
+            spend.setRefCreditId(credit.getId());
+            spend.setExpiresAt(null);
+            coinMapper.insert(spend);
+            // nullify the consumed credit's expires_at (spent state)
+            credit.setExpiresAt(null);
+            coinMapper.updateById(credit);
+            remaining -= take;
+        }
+        if (remaining > 0) {
+            throw new BusinessException(ResultCode.CONFLICT, "insufficient coins");
+        }
+    }
+
+    @Override
+    @Transactional
+    public void refundCoins(Long orderId) {
+        Order o = orderMapper.selectById(orderId);
+        if (o == null) {
+            return;
+        }
+        Long userId = o.getUserId();
+        List<CoinLedger> spendRows = coinMapper.selectSpendRowsByOrder(userId, orderId);
+        if (spendRows.isEmpty()) {
+            return; // no coins were spent on this order
+        }
+        int balance = currentBalance(userId);
+        for (CoinLedger spend : spendRows) {
+            int returnAmount = -spend.getAmount(); // positive
+            CoinLedger originalCredit = coinMapper.selectById(spend.getRefCreditId());
+            LocalDateTime restoredExpiry = originalCredit != null ? originalCredit.getExpiresAt() : null;
+            balance += returnAmount;
+            CoinLedger refund = new CoinLedger();
+            refund.setUserId(userId);
+            refund.setAmount(returnAmount);
+            refund.setBalanceAfter(balance);
+            refund.setSource(CoinSource.REFUND_RETURN);
+            refund.setRefOrderId(orderId);
+            refund.setRefCreditId(spend.getRefCreditId());
+            refund.setIdemKey("refund:" + orderId + ":" + spend.getId());
+            refund.setExpiresAt(restoredExpiry); // restore original clock, not a fresh 30 days
+            try {
+                coinMapper.insert(refund);
+            } catch (DataIntegrityViolationException e) {
+                log.debug("refundCoins({}) duplicate-key no-op on spend row {}: {}", orderId, spend.getId(), e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public void sweepExpiredCredits() {
+        List<CoinLedger> expired = coinMapper.selectExpiredUnsweptCredits();
+        for (CoinLedger credit : expired) {
+            try {
+                int balance = currentBalance(credit.getUserId());
+                CoinLedger exp = new CoinLedger();
+                exp.setUserId(credit.getUserId());
+                exp.setAmount(-credit.getAmount());
+                exp.setBalanceAfter(balance - credit.getAmount());
+                exp.setSource(CoinSource.EXPIRED);
+                exp.setRefCreditId(credit.getId());
+                exp.setExpiresAt(null);
+                coinMapper.insert(exp);
+                credit.setExpiresAt(null); // nullify so it's not re-swept
+                coinMapper.updateById(credit);
+            } catch (Exception e) {
+                log.error("sweepExpiredCredits failed for credit {}: {}", credit.getId(), e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    public CoinBalanceVO getBalance(Long userId) {
+        CoinBalanceVO vo = new CoinBalanceVO();
+        vo.setBalance(currentBalance(userId));
+        vo.setClaimedToday(coinMapper.selectDailyLogin(userId, LocalDate.now(CST)) != null);
+        vo.setExpiringSoon(0); // expiringSoon projection — see Step note below
+        return vo;
+    }
+
+    @Override
+    public PageResult<CoinHistoryVO> getHistory(Long userId, PageQuery query) {
+        Page<CoinLedger> page = new Page<>(query.getCurrent(), query.getSize());
+        IPage<CoinLedger> result = coinMapper.selectHistory(page, userId);
+        List<CoinHistoryVO> rows = result.getRecords().stream().map(this::toVO).toList();
+        return PageResult.of(result.getTotal(), result.getCurrent(), result.getSize(), rows);
+    }
+
+    private CoinHistoryVO toVO(CoinLedger c) {
+        CoinHistoryVO vo = new CoinHistoryVO();
+        vo.setId(c.getId());
+        vo.setAmount(c.getAmount());
+        vo.setSource(c.getSource().name());
+        vo.setRefOrderId(c.getRefOrderId());
+        vo.setExpiresAt(c.getExpiresAt());
+        vo.setCreateTime(c.getCreateTime());
+        vo.setBalanceAfter(c.getBalanceAfter());
+        return vo;
+    }
+
+    private int currentBalance(Long userId) {
+        Integer b = coinMapper.selectBalance(userId);
+        return b != null ? b : 0;
+    }
+}
