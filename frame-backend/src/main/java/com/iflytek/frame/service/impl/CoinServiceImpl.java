@@ -153,6 +153,11 @@ public class CoinServiceImpl implements CoinService {
             spend.setSource(CoinSource.CHECKOUT_SPEND);
             spend.setRefOrderId(orderId);
             spend.setRefCreditId(credit.getId());
+            // Snapshot the credit's expiry BEFORE nullifying it, so refundCoins can restore the
+            // original per-credit clock from the spend row (the credit's expires_at is nullified
+            // below — without this snapshot, the refund would read null and the returned coins
+            // would never be FIFO-spendable again).
+            spend.setRefCreditExpiresAt(credit.getExpiresAt());
             spend.setExpiresAt(null);
             coinMapper.insert(spend);
             // nullify the consumed credit's expires_at (spent state)
@@ -163,6 +168,20 @@ public class CoinServiceImpl implements CoinService {
         if (remaining > 0) {
             throw new BusinessException(ResultCode.CONFLICT, "insufficient coins");
         }
+    }
+
+    @Override
+    public boolean canSpend(Long userId, int coinAmount) {
+        // Read-only pre-check (no @Transactional → no rollback-only mark on the caller's tx).
+        // Uses the FIFO-spendable sum (selectSpendableBalance), which matches what spendAtCheckout
+        // can actually consume — NOT the balance SUM (which counts refunded/nullified credits via
+        // their REFUND_RETURN row that are not FIFO-spendable). This eliminates the COMMON
+        // insufficient-balance case from the consumer's rollback-only path; spendAtCheckout's
+        // CONFLICT throw remains as the last-line guard for the narrow race.
+        if (coinAmount <= 0) {
+            return true;
+        }
+        return spendableBalance(userId) >= coinAmount;
     }
 
     @Override
@@ -180,8 +199,17 @@ public class CoinServiceImpl implements CoinService {
         int balance = currentBalance(userId);
         for (CoinLedger spend : spendRows) {
             int returnAmount = -spend.getAmount(); // positive
-            CoinLedger originalCredit = coinMapper.selectById(spend.getRefCreditId());
-            LocalDateTime restoredExpiry = originalCredit != null ? originalCredit.getExpiresAt() : null;
+            // Restore the original per-credit expiry from the snapshot on the CHECKOUT_SPEND row
+            // (captured at spend time, BEFORE the credit's expires_at was nullified). Reading the
+            // credit row now would yield null (it was nullified on spend) — the snapshot is the
+            // source of truth for the original clock. A null snapshot (legacy pre-fix spend rows)
+            // falls back to the credit row's current (also null) value → refunded coins stay
+            // non-spendable, matching the pre-fix behavior for legacy rows.
+            LocalDateTime restoredExpiry = spend.getRefCreditExpiresAt();
+            if (restoredExpiry == null) {
+                CoinLedger originalCredit = coinMapper.selectById(spend.getRefCreditId());
+                restoredExpiry = originalCredit != null ? originalCredit.getExpiresAt() : null;
+            }
             balance += returnAmount;
             CoinLedger refund = new CoinLedger();
             refund.setUserId(userId);

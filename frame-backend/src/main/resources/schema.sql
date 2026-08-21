@@ -133,6 +133,7 @@ CREATE TABLE `coin_ledger` (
     `source`        VARCHAR(32)  NOT NULL,
     `ref_order_id`  BIGINT       DEFAULT NULL,
     `ref_credit_id` BIGINT       DEFAULT NULL,
+    `ref_credit_expires_at` DATETIME DEFAULT NULL, -- snapshot of the consumed credit's expires_at (for refundCoins to restore)
     `idem_key`      VARCHAR(64)  DEFAULT NULL,
     `login_date`    DATE         DEFAULT NULL,
     `expires_at`    DATETIME     DEFAULT NULL,

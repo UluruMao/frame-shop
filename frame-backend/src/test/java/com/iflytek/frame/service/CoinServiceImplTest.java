@@ -173,17 +173,45 @@ class CoinServiceImplTest {
     }
 
     @Test
+    void canSpend_returnsTrueWhenSpendableBalanceCoversAmount() {
+        // canSpend uses the FIFO-spendable sum (selectSpendableBalance), not the balance SUM —
+        // refunded/nullified credits count toward the balance SUM but are NOT FIFO-spendable, so
+        // canSpend must reflect what spendAtCheckout can actually consume.
+        when(coinMapper.selectSpendableBalance(1L)).thenReturn(150);
+        assertThat(coinService.canSpend(1L, 100)).isTrue();
+        assertThat(coinService.canSpend(1L, 150)).isTrue(); // exactly covers
+    }
+
+    @Test
+    void canSpend_returnsFalseWhenSpendableBalanceInsufficient() {
+        when(coinMapper.selectSpendableBalance(1L)).thenReturn(50);
+        assertThat(coinService.canSpend(1L, 100)).isFalse();
+    }
+
+    @Test
+    void canSpend_returnsTrueForZeroOrNegativeAmount() {
+        // a no-op spend is always "affordable" — spendAtCheckout early-returns on coinAmount <= 0.
+        assertThat(coinService.canSpend(1L, 0)).isTrue();
+        assertThat(coinService.canSpend(1L, -5)).isTrue();
+        // must not hit the mapper for the no-op case
+        verifyNoInteractions(coinMapper);
+    }
+
+    @Test
     void refundCoins_mirrorsSpendRowsAndRestoresExpiry() {
         Order o = new Order();
         o.setId(7L); o.setUserId(1L);
         when(orderMapper.selectById(7L)).thenReturn(o);
+        // The original credit's expiry — snapshotted onto the spend row at spend time (BEFORE the
+        // credit's expires_at was nullified). refundCoins reads this snapshot from the spend row,
+        // NOT from the now-nullified credit row. This is the Finding-1 fix: previously the refund
+        // re-fetched the credit via selectById(refCreditId) and read its (nullified) expires_at →
+        // refunded coins got expires_at=null → inflated the balance but were never FIFO-spendable.
+        LocalDateTime originalExpiry = LocalDateTime.now().plusDays(10);
         CoinLedger spend = new CoinLedger();
         spend.setId(20L); spend.setAmount(-40); spend.setRefCreditId(30L); spend.setSource(CoinSource.CHECKOUT_SPEND);
-        // the original credit's expiry — fetched by refCreditId
-        CoinLedger originalCredit = credit(40, LocalDateTime.now().plusDays(10));
-        originalCredit.setId(30L);
+        spend.setRefCreditExpiresAt(originalExpiry); // the snapshot captured at spend time
         when(coinMapper.selectSpendRowsByOrder(1L, 7L)).thenReturn(List.of(spend));
-        when(coinMapper.selectById(30L)).thenReturn(originalCredit);
         when(coinMapper.selectBalance(1L)).thenReturn(0);
 
         coinService.refundCoins(7L);
@@ -194,8 +222,11 @@ class CoinServiceImplTest {
         assertThat(refund.getAmount()).isEqualTo(40);
         assertThat(refund.getSource()).isEqualTo(CoinSource.REFUND_RETURN);
         assertThat(refund.getRefCreditId()).isEqualTo(30L);
-        assertThat(refund.getExpiresAt()).isEqualTo(originalCredit.getExpiresAt()); // restored
+        assertThat(refund.getExpiresAt()).isEqualTo(originalExpiry); // restored from the spend-row snapshot
         assertThat(refund.getIdemKey()).isEqualTo("refund:7:20");
+        // The refund must NOT re-fetch the (nullified) credit row — the snapshot on the spend row
+        // is the source of truth.
+        verify(coinMapper, never()).selectById(any());
     }
 
     @Test
@@ -215,10 +246,8 @@ class CoinServiceImplTest {
         when(orderMapper.selectById(7L)).thenReturn(o);
         CoinLedger spend = new CoinLedger();
         spend.setId(20L); spend.setAmount(-40); spend.setRefCreditId(30L); spend.setSource(CoinSource.CHECKOUT_SPEND);
-        CoinLedger originalCredit = credit(40, LocalDateTime.now().plusDays(10));
-        originalCredit.setId(30L);
+        spend.setRefCreditExpiresAt(LocalDateTime.now().plusDays(10)); // snapshot on the spend row
         when(coinMapper.selectSpendRowsByOrder(1L, 7L)).thenReturn(List.of(spend));
-        when(coinMapper.selectById(30L)).thenReturn(originalCredit);
         when(coinMapper.selectBalance(1L)).thenReturn(0);
         doThrow(new DataIntegrityViolationException("dup")).when(coinMapper).insert(any(CoinLedger.class));
         coinService.refundCoins(7L); // must not throw

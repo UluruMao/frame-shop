@@ -206,19 +206,20 @@ export const suite = {
       },
     },
     {
-      name: 'UC012 coin-spend row appears in history (CHECKOUT_SPEND, -100)',
+      name: 'UC012 coin-spend row appears in history (CHECKOUT_SPEND, total -coinAmount)',
       run: async (ctx) => {
         if (ctx.coinSpendSkipped) return // soft-skip: upstream spend was skipped
         const res = await http.get('/coins/history?current=1&size=20', { token: ctx.userToken })
         assert(res.status === 200, `expected 200 on history, got ${res.status}`)
-        const spendRows = res.body.data.records.filter(r => r.source === 'CHECKOUT_SPEND')
-        assert(spendRows.length >= 1, `expected ≥1 CHECKOUT_SPEND row, got ${spendRows.length}`)
-        // the most recent spend should be -coinSpendAmount for our order
-        const last = spendRows[0]
-        assert(last.amount === -ctx.coinSpendAmount,
-          `expected CHECKOUT_SPEND amount ${-ctx.coinSpendAmount}, got ${last.amount}`)
-        assert(last.refOrderId === ctx.coinSpendRealPk,
-          `expected refOrderId ${ctx.coinSpendRealPk}, got ${last.refOrderId}`)
+        // FIFO spend may split `coinAmount` across multiple CHECKOUT_SPEND rows (one per consumed
+        // credit). Fetch enough history to find them all + assert their SUM = -coinSpendAmount.
+        const resAll = await http.get('/coins/history?current=1&size=100', { token: ctx.userToken })
+        const orderSpendRows = (resAll.body.data.records || [])
+          .filter(r => r.source === 'CHECKOUT_SPEND' && r.refOrderId === ctx.coinSpendRealPk)
+        assert(orderSpendRows.length >= 1, `expected ≥1 CHECKOUT_SPEND row for order ${ctx.coinSpendRealPk}, got ${orderSpendRows.length}`)
+        const totalSpent = orderSpendRows.reduce((s, r) => s + r.amount, 0)
+        assert(totalSpent === -ctx.coinSpendAmount,
+          `expected sum of CHECKOUT_SPEND rows = ${-ctx.coinSpendAmount}, got ${totalSpent} (${orderSpendRows.length} rows)`)
       },
     },
     {

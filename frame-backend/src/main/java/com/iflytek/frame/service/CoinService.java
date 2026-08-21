@@ -24,6 +24,17 @@ public interface CoinService {
     /** UC005: deduct `coinAmount` coins FIFO for an order. Called inside the consumer's transaction. */
     void spendAtCheckout(Long userId, Long orderId, int coinAmount);
 
+    /**
+     * UC005: pre-check whether the user has enough FIFO-spendable coins to cover {@code coinAmount}
+     * (a read — no transaction marking). Used by the checkout consumer BEFORE calling
+     * {@link #spendAtCheckout}: if this returns false, the consumer sets the order FAILED + recredits
+     * stock + returns WITHOUT calling {@code spendAtCheckout} (so no exception, no rollback-only
+     * transaction mark on the shared consumer tx). {@code spendAtCheckout} still throws CONFLICT as
+     * a last-line guard for the narrow race between {@code canSpend} and the spend, but the
+     * pre-check eliminates the COMMON insufficient-balance case from the rollback-only path.
+     */
+    boolean canSpend(Long userId, int coinAmount);
+
     /** UC008/UC009: return the coins spent on an order (on refund). Idempotent (one per spent credit). */
     void refundCoins(Long orderId);
 

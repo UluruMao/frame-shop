@@ -32,6 +32,14 @@ public class CoinLedger extends BaseEntity {
     private Long refOrderId;
     /** The earned-credit row this debit/expiry balances (CHECKOUT_SPEND/REFUND_RETURN/EXPIRED). */
     private Long refCreditId;
+    /**
+     * Snapshot of the consumed credit's {@code expires_at}, captured on the CHECKOUT_SPEND row at
+     * spend time (BEFORE the credit's {@code expires_at} is nullified). The refund reads this
+     * snapshot (not the now-null credit) to restore the original per-credit expiry clock, so
+     * returned coins remain FIFO-spendable. Null on non-CHECKOUT_SPEND rows.
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private java.time.LocalDateTime refCreditExpiresAt;
     /** Idempotency key: "review:{orderId}" or "refund:{orderId}:{spendRowId}"; null otherwise. */
     private String idemKey;
     /** CST date, only for DAILY_LOGIN rows (part of uk_coin_daily). */

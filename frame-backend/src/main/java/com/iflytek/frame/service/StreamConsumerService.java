@@ -318,13 +318,41 @@ public class StreamConsumerService {
             // OrderItems, no DB-stock decrement) AND we must recredit the Redis stock the hot path
             // Lua-gated + delete the per-item seckill keys the success-loop set — mirroring the
             // existing stock-failure FAILED path above (recredit + seckill delete per item).
+            //
+            // PRE-CHECK (Finding 2 fix): a @Transactional REQUIRED method throwing a RuntimeException
+            // marks the shared transaction rollback-only BEFORE the catch block runs, so the catch's
+            // FAILED-status write + Redis recredits roll back too (UnexpectedRollbackException) and the
+            // RPOP'd payload is lost. To avoid this in the COMMON insufficient-balance case (not a race),
+            // pre-check via canSpend (a read — no tx marking) BEFORE calling spendAtCheckout. If
+            // canSpend is false, set FAILED + recredit + return WITHOUT calling spendAtCheckout (no
+            // exception, no rollback-only mark). spendAtCheckout's CONFLICT throw remains as the
+            // last-line guard for the narrow race between canSpend and the spend (documented V1
+            // limitation — spec §4c).
             if (useCoins && coinAmount > 0) {
+                if (!coinService.canSpend(userId, coinAmount)) {
+                    // insufficient spendable coins (common case, not a race) — fail the order,
+                    // recredit DB + Redis stock, delete the per-item seckill keys set during the
+                    // success loop above. NO spendAtCheckout call → no exception → no rollback-only.
+                    order.setStatus(OrderStatus.FAILED);
+                    orderMapper.updateById(order);
+                    for (JsonNode item : itemsNode) {
+                        Long pid = item.get("productId").asLong();
+                        int qty = item.get("quantity").asInt();
+                        stockGateService.recredit(pid, qty);
+                        redis.delete("seckill:" + pid + ":" + userId);
+                    }
+                    redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                            String.valueOf(order.getId()));
+                    redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
+                    return;
+                }
                 try {
                     coinService.spendAtCheckout(userId, order.getId(), coinAmount);
                 } catch (com.iflytek.frame.exception.BusinessException coinFail) {
                     if (coinFail.getCode() == com.iflytek.frame.common.ResultCode.CONFLICT.getCode()) {
-                        // insufficient coins (narrow race) — fail the order, recredit DB + Redis stock,
-                        // delete the per-item seckill keys set during the success loop above.
+                        // narrow race (canSpend passed but a concurrent spend won the FOR UPDATE lock
+                        // first) — the rollback-only behavior persists here (documented V1 limitation).
+                        // Fail the order, recredit DB + Redis stock, delete the per-item seckill keys.
                         order.setStatus(OrderStatus.FAILED);
                         orderMapper.updateById(order);
                         for (JsonNode item : itemsNode) {
