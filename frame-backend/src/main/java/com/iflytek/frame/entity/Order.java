@@ -19,6 +19,8 @@ public class Order extends BaseEntity {
     private String customerEmail;
     private String shippingAddress;
     private int totalInCents;
+    /** Actual amount paid after coin discount (UC005/UC012). Review reward = this / 100. */
+    private int paidInCents;
     private OrderStatus status;
     private String idempotencyKey;
     private String customerPhone;
