@@ -67,6 +67,31 @@ CREATE TABLE IF NOT EXISTS `order_item` (
     KEY `idx_order_item_product` (`product_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `chat_session` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+    `user_id`     BIGINT       NOT NULL,
+    `admin_id`    BIGINT,
+    `status`      VARCHAR(16)  NOT NULL DEFAULT 'OPEN',
+    `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `idx_session_user` (`user_id`),
+    INDEX `idx_session_admin` (`admin_id`),
+    INDEX `idx_session_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `chat_message` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+    `session_id`  BIGINT       NOT NULL,
+    `sender_type` VARCHAR(16)  NOT NULL,
+    `sender_id`   BIGINT       NOT NULL,
+    `content`     TEXT         NOT NULL,
+    `image_url`   VARCHAR(512),
+    `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `idx_msg_session` (`session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Create a dedicated app user (not root) for production
 CREATE USER IF NOT EXISTS 'frame_app'@'localhost' IDENTIFIED BY 'change_me_in_prod';
 GRANT ALL PRIVILEGES ON frame_db.* TO 'frame_app'@'localhost';
