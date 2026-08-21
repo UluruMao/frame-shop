@@ -1,6 +1,7 @@
 import { http } from '../lib/http.mjs'
 import { assert } from '../lib/assert.mjs'
 import { env } from '../lib/env.mjs'
+import { registerWithCode } from '../lib/sms.mjs'
 
 // Polls product stock until it reaches 0, bounded by a local timeout.
 // Stock decrement is async: the consumer drains orders:pending (~500ms cadence)
@@ -47,12 +48,15 @@ export const suite = {
         assert(open.status === 200, `sale open failed: ${open.status}`)
 
         // 2. Register 50 distinct buyers (each needs a unique username + token).
+        //    Username rule: 4-25 chars, ALPHANUMERIC ONLY. The 'i' suffix makes each
+        //    username unique within the same Date.now() millisecond. phoneSuffix=i keeps
+        //    the pre-seeded phone unique across the tight synchronous loop.
         const N = 50, K = 5
         const buyers = []
         for (let i = 0; i < N; i++) {
-          const u = 'e2e_mutex_' + Date.now() + '_' + i
-          await http.post('/auth/register', { username: u, password: 'pass1234' })
-          const login = await http.post('/auth/login', { username: u, password: 'pass1234' })
+          const u = 'e2eb' + Date.now() + i
+          await registerWithCode(http, { username: u, password: 'Pass1234!', phoneSuffix: i })
+          const login = await http.post('/auth/login', { username: u, password: 'Pass1234!' })
           buyers.push(login.body.data.token)
         }
 
@@ -61,6 +65,8 @@ export const suite = {
           http.post('/checkout', {
             items: [{ productId: pid, quantity: 1 }],
             customerName: 't', customerEmail: 't@t', shippingAddress: 't',
+            customerPhone: '13800000000',
+            paymentMethod: 'WECHAT',
             idempotencyKey: `mutex-${Date.now()}-${i}`,
           }, { token })
         ))

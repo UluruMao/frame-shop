@@ -52,14 +52,16 @@ export const suite = {
   name: 'reviews',
   tests: [
     {
-      name: 'setup: admin + user tokens (reuse orders-suite fallback)',
+      name: 'setup: admin + user tokens (admin is the principal)',
       run: async (ctx) => {
         if (!ctx.adminToken) {
           const a = await http.post('/auth/login', env.ADMIN)
           assert(a.status === 200, `admin login expected 200, got ${a.status}`)
           ctx.adminToken = a.body.data.token
         }
-        if (!ctx.userToken) ctx.userToken = ctx.adminToken
+        // Use admin as the principal (not the registered ctx.userToken) so this suite's
+        // checkouts don't share the registered user's /checkout rate-limit bucket.
+        ctx.userToken = ctx.adminToken
       },
     },
     {

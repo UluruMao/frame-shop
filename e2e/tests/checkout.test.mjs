@@ -1,6 +1,7 @@
 import { http } from '../lib/http.mjs'
 import { assert } from '../lib/assert.mjs'
 import { env } from '../lib/env.mjs'
+import { registerWithCode } from '../lib/sms.mjs'
 
 // Polls order_status until the REAL persisted PENDING order, bounded by POLL_TIMEOUT_MS.
 // Why "id !== orderId": OrderServiceImpl.getById returns a SYNTHETIC Order (id=correlationId,
@@ -30,6 +31,8 @@ export const suite = {
         const res = await http.post('/checkout', {
           items: [{ productId: ctx.saleProductId, quantity: 1 }],
           customerName: 't', customerEmail: 't@t', shippingAddress: 't',
+          customerPhone: '13800000000',
+          paymentMethod: 'WECHAT',
           idempotencyKey: ctx.idemKey,
         }, { token: ctx.userToken })
         assert(res.status === 202, `expected 202, got ${res.status}`)
@@ -60,15 +63,18 @@ export const suite = {
       run: async (ctx) => {
         // The one-per-user seckill:{pid}:{userId} gate (set after the first user paid) blocks
         // a 2nd buy by the same user with 409 "already purchased". Register a SECOND user and
-        // use their token so the cancel-flow checkout isn't blocked.
-        const u2 = 'e2e_cancel_' + Date.now()
-        await http.post('/auth/register', { username: u2, password: 'pass1234' })
-        const l2 = await http.post('/auth/login', { username: u2, password: 'pass1234' })
+        // use their token so the cancel-flow checkout isn't blocked. Username rule: alphanumeric
+        // only, 4-25 chars; 'e2ec' + ts stays well under 25.
+        const u2 = 'e2ec' + Date.now()
+        await registerWithCode(http, { username: u2, password: 'Pass1234!' })
+        const l2 = await http.post('/auth/login', { username: u2, password: 'Pass1234!' })
         const token2 = l2.body.data.token
         const idem = 'cancel-' + Date.now()
         const co = await http.post('/checkout', {
           items: [{ productId: ctx.saleProductId, quantity: 1 }],
           customerName: 't', customerEmail: 't@t', shippingAddress: 't',
+          customerPhone: '13800000000',
+          paymentMethod: 'WECHAT',
           idempotencyKey: idem,
         }, { token: token2 })
         assert(co.status === 202, `expected 202, got ${co.status}`)
@@ -91,6 +97,8 @@ export const suite = {
         const res = await http.post('/checkout', {
           items: [{ productId: ctx.saleProductId, quantity: 1 }],
           customerName: 't', customerEmail: 't@t', shippingAddress: 't',
+          customerPhone: '13800000000',
+          paymentMethod: 'WECHAT',
           idempotencyKey: ctx.idemKey,  // reuse the first checkout's key
         }, { token: ctx.userToken })
         // Backend rejects duplicate idempotency keys (and the same user re-buying) as 409.
@@ -105,6 +113,8 @@ export const suite = {
         const res = await http.post('/checkout', {
           items: [{ productId: ctx.saleProductId, quantity: 999 }],
           customerName: 't', customerEmail: 't@t', shippingAddress: 't',
+          customerPhone: '13800000000',
+          paymentMethod: 'WECHAT',
           idempotencyKey: 'soldout-' + Date.now(),
         }, { token: ctx.userToken })
         assert(res.status === 409 || res.status === 503, `expected 409 (sold out) or 503, got ${res.status}`)

@@ -92,10 +92,12 @@ export const suite = {
           ctx.adminToken = a.body.data.token
         }
         // The admin login (above, or from an earlier suite) fired awardDailyLogin
-        // for userId=1. The SMS-gated /auth/register can't run in e2e (same known
-        // gap as orders/reviews), so ctx.userToken falls back to the admin token —
-        // the admin IS the coin-earning user for this suite.
-        if (!ctx.userToken) ctx.userToken = ctx.adminToken
+        // for userId=1. This suite tests the admin's daily-login reward + coin-spend
+        // lifecycle, so it uses the admin token as its principal regardless of whether
+        // an earlier suite registered a real user (ctx.userToken is intentionally
+        // overwritten here — the registered user has 0 coins; admin is the coin-earning
+        // user for this suite by design).
+        ctx.userToken = ctx.adminToken
       },
     },
     {

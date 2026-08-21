@@ -28,6 +28,8 @@ export const suite = {
         const res = await http.post('/checkout', {
           items: [{ productId: ctx.saleProductId, quantity: 1 }],
           customerName: 't', customerEmail: 't@t', shippingAddress: 't',
+          customerPhone: '13800000000',
+          paymentMethod: 'WECHAT',
           idempotencyKey: 'pre-open-' + Date.now(),
         }, { token: ctx.userToken })
         assert(res.status === 503, `expected 503 (stock not initialized), got ${res.status}`)
