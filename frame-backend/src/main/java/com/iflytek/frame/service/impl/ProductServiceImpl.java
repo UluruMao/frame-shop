@@ -141,7 +141,8 @@ public class ProductServiceImpl implements ProductService {
     }
 
     /** Invalidate the entire product list cache (on any product mutation). */
-    private void invalidateListCache() {
+    @Override
+    public void invalidateListCache() {
         try {
             var keys = redis.opsForSet().members("products:page:keys");
             if (keys != null && !keys.isEmpty()) {

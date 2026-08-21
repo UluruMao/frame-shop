@@ -67,18 +67,35 @@ class ProductListCacheIntegrationTest {
         PageResult<ProductListItem> first = productService.page(q);
         assertNotNull(first);
         assertThat(first.getRecords()).isNotEmpty();
+        int stockBefore = first.getRecords().get(0).getStock();
 
         // A cache key should now be tracked in the products:page:keys SET.
         assertThat(redis.opsForSet().members("products:page:keys"))
                 .as("list cache key should be tracked after a page() miss")
                 .isNotEmpty();
+        // And the cache key itself exists in Redis (proves the write happened).
+        var tracked = redis.opsForSet().members("products:page:keys");
+        assertThat(tracked).isNotEmpty();
+        String cacheKey = tracked.iterator().next();
+        assertThat(redis.hasKey(cacheKey))
+                .as("the cached list payload should exist in Redis before the 2nd call")
+                .isTrue();
 
-        // Second call with the same normalized query: should hit the cache (no new tracking set
-        // entry is added, but the key remains). The result must be transparently identical.
+        // Mutate the product's stock DIRECTLY in the DB (bypassing ProductService, so the cache is
+        // NOT invalidated). If the 2nd page() call re-reads the DB, it would see the new stock.
+        // If it hits the cache, it returns the STALE pre-mutation stock — proving the hit path.
+        int mutatedStock = stockBefore + 1234;
+        jdbc.update("UPDATE product SET stock = ? WHERE id = ?", mutatedStock, seededId);
+
+        // Second call with the same normalized query: must hit the cache (stale stock), NOT re-read.
         PageResult<ProductListItem> second = productService.page(q);
         assertNotNull(second);
         assertThat(second.getTotal()).isEqualTo(first.getTotal());
         assertThat(second.getRecords()).hasSameSizeAs(first.getRecords());
+        assertThat(second.getRecords().get(0).getStock())
+                .as("2nd call must return the STALE pre-mutation stock (cache hit), not the DB value")
+                .isEqualTo(stockBefore)
+                .isNotEqualTo(mutatedStock);
     }
 
     @Test
