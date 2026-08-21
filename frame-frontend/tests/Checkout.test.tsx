@@ -24,7 +24,13 @@ vi.mock('@/api/order', () => ({
   getMyOrders: vi.fn(),
 }))
 
+vi.mock('@/api/coin', () => ({
+  getCoinBalance: vi.fn(),
+  getCoinHistory: vi.fn(),
+}))
+
 import { checkout, getOrder, payOrder } from '@/api/order'
+import { getCoinBalance } from '@/api/coin'
 import type { CheckoutResponse, Order } from '@/api/types'
 
 function mockCheckout(overrides: Partial<CheckoutResponse> = {}): CheckoutResponse {
@@ -73,7 +79,15 @@ function renderCheckout() {
 /** Seed the cart via localStorage so Checkout sees a non-empty cart on first render. */
 function seedCart() {
   const cart = {
-    items: [{ productId: 1, name: 'Widget', priceInCents: 2500, quantity: 1, stock: 5 }],
+    items: [{ productId: 1, name: 'Widget', priceInCents: 2500, quantity: 1, stock: 5, isFlashSale: false }],
+  }
+  localStorage.setItem('frame-cart', JSON.stringify(cart))
+}
+
+/** Seed a flash-sale cart item — coins UI must be gated off. */
+function seedFlashCart() {
+  const cart = {
+    items: [{ productId: 2, name: 'Flash Gizmo', priceInCents: 999, quantity: 1, stock: 10, isFlashSale: true }],
   }
   localStorage.setItem('frame-cart', JSON.stringify(cart))
 }
@@ -84,6 +98,10 @@ describe('Checkout three-stage flow', () => {
     vi.clearAllMocks()
     localStorage.clear()
     seedCart()
+    // Default coin-balance mock so the fetch-on-mount effect in the existing
+    // tests (which don't exercise coins) resolves cleanly. Individual tests
+    // override this with their own mockResolvedValue.
+    vi.mocked(getCoinBalance).mockResolvedValue({ balance: 0, claimedToday: false, expiringSoon: 0 })
   })
 
   afterEach(() => {
@@ -218,5 +236,51 @@ describe('Checkout three-stage flow', () => {
       expect(screen.getByText(/order failed/i)).toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
+  })
+
+  it('coins checkbox disabled when cart has a flash-sale item', async () => {
+    seedFlashCart()
+    vi.mocked(getCoinBalance).mockResolvedValue({ balance: 500, claimedToday: true, expiringSoon: 0 })
+    renderCheckout()
+
+    // The flash-sale block shows the "no coins for flash items" message instead
+    // of the checkbox.
+    await waitFor(() => {
+      expect(screen.getByText(/折扣商品无法使用金币/)).toBeInTheDocument()
+    })
+    // The 使用金币 checkbox is NOT rendered for flash carts.
+    expect(screen.queryByLabelText(/使用金币/)).not.toBeInTheDocument()
+  })
+
+  it('submitting with useCoins includes coinAmount', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(getCoinBalance).mockResolvedValue({ balance: 500, claimedToday: true, expiringSoon: 0 })
+    vi.mocked(checkout).mockResolvedValue(mockCheckout())
+    vi.mocked(getOrder)
+      .mockResolvedValueOnce(syntheticQueuedOrder(4242))
+      .mockResolvedValueOnce(realPendingOrder(4242))
+
+    renderCheckout()
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/使用金币/)).toBeEnabled()
+    })
+    // Balance of 500 → usableCoins capped to 100-coin granularity = 500, but
+    // the 50% subtotal cap (2500/2 = 1250 → floor/100*100 = 1200) is higher,
+    // so usableCoins = min(1200, 500) = 500.
+    await user.click(screen.getByLabelText(/使用金币/))
+    const amountInput = await screen.findByLabelText(/抵扣金币数/)
+    await user.clear(amountInput)
+    await user.type(amountInput, '200')
+
+    await user.type(screen.getByLabelText(/name/i), 'Test User')
+    await user.type(screen.getByLabelText(/email/i), 'test@example.com')
+    await user.type(screen.getByLabelText(/shipping address/i), '123 St')
+    await user.type(screen.getByLabelText(/phone/i), '13800138000')
+    await user.click(screen.getByRole('button', { name: /place order/i }))
+
+    expect(vi.mocked(checkout)).toHaveBeenCalledWith(
+      expect.objectContaining({ useCoins: true, coinAmount: 200 }),
+    )
   })
 })

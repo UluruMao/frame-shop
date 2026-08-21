@@ -11,6 +11,8 @@ export interface CartItem {
   quantity: number
   /** Stock cap at the moment of add — {@code add} never lets quantity exceed it. */
   stock: number
+  /** Whether the product is a flash-sale (discount) item — gates coin usage (UC012). */
+  isFlashSale: boolean
 }
 
 export interface CartState {
@@ -47,7 +49,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         }
         return {
           items: state.items.map((i) =>
-            i.productId === action.product.id ? { ...i, quantity: nextQty, stock: action.product.stock ?? 0 } : i,
+            i.productId === action.product.id ? { ...i, quantity: nextQty, stock: action.product.stock ?? 0, isFlashSale: Boolean(action.product.isFlashSale) } : i,
           ),
         }
       }
@@ -62,6 +64,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
             priceInCents: action.product.priceInCents,
             quantity: cappedQty,
             stock: action.product.stock ?? 0,
+            isFlashSale: Boolean(action.product.isFlashSale),
           },
         ],
       }
@@ -89,7 +92,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         if (!p) continue // product deleted — drop the line
         const cappedQty = Math.min(item.quantity, p.stock ?? 0)
         if (cappedQty <= 0) continue // out of stock — drop the line
-        next.push({ ...item, quantity: cappedQty, stock: p.stock ?? 0, name: p.name, priceInCents: p.priceInCents })
+        next.push({ ...item, quantity: cappedQty, stock: p.stock ?? 0, name: p.name, priceInCents: p.priceInCents, isFlashSale: Boolean(p.isFlashSale) })
       }
       return { items: next }
     }
