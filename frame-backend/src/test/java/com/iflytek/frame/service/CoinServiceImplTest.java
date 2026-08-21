@@ -131,10 +131,11 @@ class CoinServiceImplTest {
         Product p = new Product();
         p.setId(1L); p.setPriceInCents(2000); p.setFlashSale(false); // subtotal ¥20, 50% = ¥10 = 1000 coins
         when(coinMapper.selectBalance(1L)).thenReturn(500); // balance 500 < 1000 max
+        when(coinMapper.selectSpendableBalance(1L)).thenReturn(500); // all 500 are FIFO-spendable
         CoinDiscountPreview r = coinService.previewCheckoutDiscount(1L, List.of(p), Map.of(1L, 1));
         assertThat(r.getEligible()).isTrue();
         assertThat(r.getMaxCoins()).isEqualTo(1000);
-        assertThat(r.getUsable()).isEqualTo(500); // clamped to balance, floored to 100
+        assertThat(r.getUsable()).isEqualTo(500); // clamped to spendable, floored to 100
     }
 
     @Test

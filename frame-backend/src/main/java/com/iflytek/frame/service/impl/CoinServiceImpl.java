@@ -116,7 +116,13 @@ public class CoinServiceImpl implements CoinService {
         int maxDiscountCents = subtotalCents / 2; // 50% cap
         int maxCoins = (maxDiscountCents / COINS_PER_YUAN) * COINS_PER_YUAN; // 100-coin granularity
         int balance = currentBalance(userId);
-        int usable = Math.min(maxCoins, (balance / COINS_PER_YUAN) * COINS_PER_YUAN); // floored to 100
+        // `usable` is what spendAtCheckout can actually deduct FIFO (sum of un-spent, un-expired
+        // positive credits), NOT the balance SUM — the balance SUM counts refunded/nullified credits
+        // (via their REFUND_RETURN row) that are not FIFO-spendable. Using the balance SUM here would
+        // report more usable coins than a spend can consume, so the consumer's spendAtCheckout would
+        // throw CONFLICT after partial writes, marking the consumer tx rollback-only (Task 6 e2e bug).
+        int spendable = spendableBalance(userId);
+        int usable = Math.min(maxCoins, (spendable / COINS_PER_YUAN) * COINS_PER_YUAN); // floored to 100
         p.setEligible(true);
         p.setMaxCoins(maxCoins);
         p.setBalance(balance);
@@ -248,6 +254,11 @@ public class CoinServiceImpl implements CoinService {
 
     private int currentBalance(Long userId) {
         Integer b = coinMapper.selectBalance(userId);
+        return b != null ? b : 0;
+    }
+
+    private int spendableBalance(Long userId) {
+        Integer b = coinMapper.selectSpendableBalance(userId);
         return b != null ? b : 0;
     }
 }

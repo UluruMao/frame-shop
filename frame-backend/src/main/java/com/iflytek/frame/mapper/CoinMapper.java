@@ -15,6 +15,17 @@ public interface CoinMapper extends BaseMapper<CoinLedger> {
     /** Current usable balance = SUM(amount) over rows where expires_at IS NULL OR > now(). */
     Integer selectBalance(@Param("userId") Long userId);
 
+    /**
+     * Sum of FIFO-spendable positive credits (amount > 0 AND expires_at IS NOT NULL AND > now()).
+     * Differs from {@link #selectBalance}: the balance SUM counts refunded/nullified credits via their
+     * REFUND_RETURN row, but those are NOT FIFO-spendable (their expiry was nullified on the original
+     * spend). previewCheckoutDiscount.usable must reflect what spendAtCheckout can actually consume,
+     * not the balance SUM — otherwise the preview reports more usable coins than a spend can deduct,
+     * and the consumer's spendAtCheckout throws CONFLICT (insufficient) after partial writes, marking
+     * the consumer tx rollback-only. (See spec §4c/§4h, Task 6 e2e.)
+     */
+    Integer selectSpendableBalance(@Param("userId") Long userId);
+
     /** Pending positive credit rows for FIFO spend, oldest-first, locked for update. */
     List<CoinLedger> selectSpendableCreditsForUpdate(@Param("userId") Long userId);
 
