@@ -10,6 +10,7 @@ import Products from '@/pages/Products'
 import ProductDetailPage from '@/pages/ProductDetailPage'
 import Checkout from '@/pages/Checkout'
 import Orders from '@/pages/Orders'
+import Coins from '@/pages/Coins'
 import Admin from '@/pages/Admin'
 import Profile from '@/pages/Profile'
 
@@ -36,6 +37,7 @@ const routes: RouteObject[] = [
       { path: 'products/:id', element: <ProductDetailPage /> },
       { path: 'checkout', element: <RequireAuth><Checkout /></RequireAuth> },
       { path: 'orders', element: <RequireAuth><Orders /></RequireAuth> },
+      { path: 'coins', element: <RequireAuth><Coins /></RequireAuth> },
       { path: 'profile', element: <RequireAuth><Profile /></RequireAuth> },
       { path: 'admin', element: <RequireAuth><Admin /></RequireAuth> },
     ],
