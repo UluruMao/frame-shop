@@ -35,12 +35,13 @@ class AdminOrderServiceTest {
 
     @Mock OrderMapper orderMapper;
     @Mock OrderStockReleaseService orderStockReleaseService;
+    @Mock CoinService coinService;
 
     private AdminOrderServiceImpl adminOrderService;
 
     @BeforeEach
     void setUp() {
-        adminOrderService = new AdminOrderServiceImpl(orderMapper, orderStockReleaseService);
+        adminOrderService = new AdminOrderServiceImpl(orderMapper, orderStockReleaseService, coinService);
     }
 
     // ===== ship: PAID → SHIPPED =====

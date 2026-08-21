@@ -60,12 +60,13 @@ class OrderServiceImplTest {
     @Mock StringRedisTemplate redis;
     @Mock ValueOperations<String, String> valueOps;
     @Mock OrderStockReleaseService orderStockReleaseService;
+    @Mock CoinService coinService;
 
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(orderMapper, orderItemMapper, redis, orderStockReleaseService);
+        orderService = new OrderServiceImpl(orderMapper, orderItemMapper, redis, orderStockReleaseService, coinService);
     }
 
     // ===== getById correlation-id resolution =====

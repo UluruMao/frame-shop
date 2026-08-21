@@ -35,6 +35,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemMapper orderItemMapper;
     private final StringRedisTemplate redis;
     private final OrderStockReleaseService orderStockReleaseService;
+    private final com.iflytek.frame.service.CoinService coinService;
 
     /**
      * Resolve the id the client holds (a DB PK or the millis-based correlation id from the
@@ -128,6 +129,11 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException(ResultCode.CONFLICT, "order cannot be cancelled in current state");
         }
         orderStockReleaseService.release(o);
+        try {
+            coinService.refundCoins(o.getId());
+        } catch (Exception e) {
+            log.warn("refundCoins({}) failed after cancel-paid: {}", o.getId(), e.getMessage());
+        }
     }
 
     @Override
