@@ -6,8 +6,8 @@ USE frame_db;
 
 DROP TABLE IF EXISTS `operation_log`;
 DROP TABLE IF EXISTS `order_item`;
-DROP TABLE IF EXISTS `coin_ledger`;
 DROP TABLE IF EXISTS `review`;
+DROP TABLE IF EXISTS `coin_ledger`;
 DROP TABLE IF EXISTS `orders`;
 DROP TABLE IF EXISTS `product`;
 DROP TABLE IF EXISTS `user`;
