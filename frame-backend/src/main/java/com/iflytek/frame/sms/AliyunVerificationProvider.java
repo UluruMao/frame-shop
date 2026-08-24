@@ -81,6 +81,10 @@ public class AliyunVerificationProvider implements VerificationCodeProvider {
                 .phoneNumber(phone)
                 .signName(cfg.getSignName())
                 .templateCode(cfg.getTemplateCode())
+                // templateParam is required by Aliyun — the ##code## placeholder is
+                // substituted by the code Aliyun generates (we never see it). The default
+                // system-preset template uses {code}/{min} placeholders.
+                .templateParam("{\"code\":\"##code##\",\"min\":\"5\"}")
                 .codeLength(6L)
                 .validTime(300L)
                 .interval(60L)
