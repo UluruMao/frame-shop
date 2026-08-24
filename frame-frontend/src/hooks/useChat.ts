@@ -26,13 +26,25 @@ export function useChat(sessionId: number | null) {
     if (!sessionId) return
     const token = useAuthStore.getState().token
     if (!token) return
+    // Clear stale messages immediately on session change so the UI never briefly
+    // renders the previous session's messages while the new history loads.
+    setMessages([])
     const client = new Client({
       webSocketFactory: () => new SockJS('/ws-chat') as any,
       connectHeaders: { Authorization: `Bearer ${token}` },
       onConnect: () => {
         setConnected(true)
         client.subscribe(`/topic/session/${sessionId}`, (frame) => {
-          const msg = JSON.parse(frame.body) as ChatMessageVO
+          // Guard against non-JSON bodies (e.g. ERROR frames, empty body): a
+          // thrown exception in the subscription callback would silently break
+          // message reception for the session, so log + skip on parse failure.
+          let msg: ChatMessageVO
+          try {
+            msg = JSON.parse(frame.body) as ChatMessageVO
+          } catch {
+            console.error('[useChat] skipping non-JSON STOMP frame body:', frame.body)
+            return
+          }
           setMessages((prev) => [...prev, msg])
         })
       },

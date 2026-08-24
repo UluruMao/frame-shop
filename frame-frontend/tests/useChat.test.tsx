@@ -28,6 +28,7 @@ vi.mock('sockjs-client', () => ({ default: vi.fn() }))
 
 import { useChat } from '@/hooks/useChat'
 import { useAuthStore } from '@/store/useAuthStore'
+import { Client } from '@stomp/stompjs'
 
 describe('useChat', () => {
   beforeEach(() => {
@@ -58,5 +59,35 @@ describe('useChat', () => {
     expect(mockPublish).toHaveBeenCalled()
     const call = mockPublish.mock.calls[0][0]
     expect(call.destination).toBe('/app/chat/7')
+  })
+
+  it('carries the JWT in the CONNECT Authorization header', () => {
+    renderHook(() => useChat(7))
+    expect(Client).toHaveBeenCalled()
+    const config = (Client as any).mock.calls[0][0]
+    expect(config.connectHeaders.Authorization).toBe('Bearer fake.jwt')
+  })
+
+  it('clears messages when sessionId changes (no stale-message flash)', async () => {
+    const { result, rerender } = renderHook(({ id }) => useChat(id), { initialProps: { id: 7 } })
+    act(() => onConnectCallback?.())
+    // session A receives a message
+    act(() => onMessageCallback?.({ body: JSON.stringify({ id: 1, sessionId: 7, senderType: 'USER', content: 'from-A', senderId: 1001 }) }))
+    expect(result.current.messages).toHaveLength(1)
+    // switch to session B: messages must reset immediately, before B's history loads
+    rerender({ id: 8 })
+    expect(result.current.messages).toHaveLength(0)
+  })
+
+  it('skips a malformed STOMP frame body without throwing', async () => {
+    const { result } = renderHook(() => useChat(7))
+    act(() => onConnectCallback?.())
+    // a non-JSON body (e.g. an ERROR frame) must not break message reception
+    expect(() => act(() => onMessageCallback?.({ body: 'not-json' }))).not.toThrow()
+    expect(result.current.messages).toHaveLength(0)
+    // a valid message after the malformed one is still received
+    act(() => onMessageCallback?.({ body: JSON.stringify({ id: 2, sessionId: 7, senderType: 'USER', content: 'ok', senderId: 1001 }) }))
+    expect(result.current.messages).toHaveLength(1)
+    expect(result.current.messages[0].content).toBe('ok')
   })
 })
