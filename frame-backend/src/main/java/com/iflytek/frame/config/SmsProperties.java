@@ -26,6 +26,9 @@ public class SmsProperties {
         private String accessKeyId = "";
         private String accessKeySecret = "";
         private String region = "cn-hangzhou";
-        private String serviceCode = "";
+        /** 系统赠送签名名称 (from the 短信认证服务 console — not user-customizable). */
+        private String signName = "";
+        /** 系统赠送验证码模板编号 (from the console — not user-customizable). */
+        private String templateCode = "";
     }
 }

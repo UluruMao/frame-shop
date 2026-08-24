@@ -93,13 +93,17 @@ frame:
   rate-limit:
     checkout-per-minute: 10
   sms:
-    provider: logging          # logging | aliyun   (logging = dev stub; aliyun = 短信认证服务)
+    # provider 切换：logging（dev stub，不真发短信）/ aliyun（真实短信认证服务）。
+    # 用环境变量 FRAME_SMS_PROVIDER=aliyun 切到真实短信，不在此处硬编码。
+    provider: ${FRAME_SMS_PROVIDER:logging}
     cooldown-seconds: 60       # dev-stub cooldown only; prod relies on Aliyun's 防盗刷
     aliyun:
-      access-key-id: ""        # set via env FRAME_SMS_AK_ID (Aliyun RAM user for 短信认证服务)
-      access-key-secret: ""    # set via env FRAME_SMS_AK_SECRET
-      region: cn-hangzhou
-      service-code: ""         # 短信认证服务 service code (from the Aliyun console), if the API needs one
+      # 全部走环境变量——凭据不进 git。本地默认空（用 logging stub）。
+      access-key-id: ${FRAME_SMS_AK_ID:}
+      access-key-secret: ${FRAME_SMS_AK_SECRET:}
+      region: ${FRAME_SMS_REGION:cn-hangzhou}
+      sign-name: ${FRAME_SMS_SIGN_NAME:}        # 系统赠送签名名称（控制台获取，如 恒创联众）
+      template-code: ${FRAME_SMS_TEMPLATE_CODE:}  # 系统赠送模板编号（控制台获取，如 100001）
 
 # --- SpringDoc OpenAPI (Swagger UI) ---
 springdoc:

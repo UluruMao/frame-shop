@@ -44,6 +44,16 @@
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
+        <!-- Aliyun 短信认证服务 (dypnsapi) SDK — real SMS verify-code send/check.
+             Active only when frame.sms.provider=aliyun. The dev LoggingVerificationProvider
+             stays the default; this is wired but unused until the user activates the service.
+             Uses the darabonba-based AsyncClient (com.aliyun.sdk.service.dypnsapi20170525). -->
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>alibabacloud-dypnsapi20170525</artifactId>
+            <version>1.0.8</version>
+        </dependency>
+
         <!-- AOP: @Aspect / @Around for the operation-log aspect (NFR op-log).
              Brings spring-aop + aspectjweaver; not transitive from starter-web.
              In Spring Boot 4.x the starter is named spring-boot-starter-aspectj

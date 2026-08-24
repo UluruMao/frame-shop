@@ -1,25 +1,41 @@
 package com.iflytek.frame.sms;
 
+import com.aliyun.auth.credentials.Credential;
+import com.aliyun.auth.credentials.provider.StaticCredentialProvider;
+import com.aliyun.sdk.service.dypnsapi20170525.AsyncClient;
+import com.aliyun.sdk.service.dypnsapi20170525.models.CheckSmsVerifyCodeRequest;
+import com.aliyun.sdk.service.dypnsapi20170525.models.CheckSmsVerifyCodeResponse;
+import com.aliyun.sdk.service.dypnsapi20170525.models.SendSmsVerifyCodeRequest;
+import com.aliyun.sdk.service.dypnsapi20170525.models.SendSmsVerifyCodeResponse;
 import com.iflytek.frame.config.SmsProperties;
+import com.iflytek.frame.sms.SmsPurpose;
+import darabonba.core.client.ClientOverrideConfiguration;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.ExecutionException;
+
 /**
- * Real verification-code provider via Aliyun 短信认证服务 (SMS Authentication Service).
- * Active only when {@code frame.sms.provider=aliyun}. Aliyun owns the code lifecycle:
- * it generates + sends the code on {@link #send}, and verifies it on {@link #verify}
- * (we never see the code). No signature/template approval needed (unlike dysmsapi).
+ * Real verification-code provider via Aliyun 短信认证服务 (the dypnsapi variant of the
+ * 号码认证服务 / Dypnsapi — NOT the traditional 短信服务 Dysmsapi). Active only when
+ * {@code frame.sms.provider=aliyun}.
  *
- * <p>NOT unit-tested (Phase A scope: no SMS test scripts). The user verifies manually.
- * The exact SDK method names below are best-effort (I could not fetch the live doc);
- * if the real API differs, follow skip-and-return: delete the {@code @Component}/bean,
- * log to docs/superpowers/skipped-issues.md, and fall back to LoggingVerificationProvider.
+ * <p>Aliyun owns the code lifecycle: it generates + sends the code on {@link #send} (via
+ * SendSmsVerifyCode) and verifies it on {@link #verify} (via CheckSmsVerifyCode). We never
+ * see the code. No 短信签名/模板 approval needed — the 短信认证服务 provides system-preset
+ * {@code signName} + {@code templateCode} (configured in {@code frame.sms.aliyun.*}).
  *
- * <p>TODO(impl): replace the pseudocode calls with the confirmed SDK client once the
- * Aliyun 短信认证服务 SDK artifact + method names are verified from the official doc.
+ * <p>Per the Phase A scope: NO test asserts physical SMS delivery — the user verifies the
+ * real provider manually. The dev {@link LoggingVerificationProvider} stays the working
+ * default until this is configured + verified.
+ *
+ * <p>SDK: {@code com.aliyun:alibabacloud-dypnsapi20170525} (the darabonba-based AsyncClient).
+ * Endpoint: {@code dypnsapi.aliyuncs.com}.
  */
 @Component("aliyunVerificationProvider")
 @ConditionalOnProperty(name = "frame.sms.provider", havingValue = "aliyun")
@@ -30,26 +46,90 @@ public class AliyunVerificationProvider implements VerificationCodeProvider {
 
     private final SmsProperties props;
 
+    private AsyncClient client;
+
+    @PostConstruct
+    void init() {
+        SmsProperties.Aliyun cfg = props.getAliyun();
+        // StaticCredentialProvider with the configured AccessKey (not the default chain).
+        StaticCredentialProvider provider = StaticCredentialProvider.create(
+                Credential.builder()
+                        .accessKeyId(cfg.getAccessKeyId())
+                        .accessKeySecret(cfg.getAccessKeySecret())
+                        .build());
+        client = AsyncClient.builder()
+                .region(cfg.getRegion())
+                .credentialsProvider(provider)
+                .overrideConfiguration(ClientOverrideConfiguration.create()
+                        .setEndpointOverride("dypnsapi.aliyuncs.com"))
+                .build();
+        log.info("[Aliyun SMS-auth] client initialized (region={}, signName={}, templateCode={})",
+                cfg.getRegion(), cfg.getSignName(), cfg.getTemplateCode());
+    }
+
+    @PreDestroy
+    void close() {
+        if (client != null) {
+            client.close();
+        }
+    }
+
     @Override
     public void send(String phone, SmsPurpose purpose) {
-        // TODO(impl): build the Aliyun client (DefaultAcsClient or the darabonba client for the
-        // 短信认证服务 SDK) using props.getAliyun().getAccessKeyId()/Secret/Region/ServiceCode,
-        // then call SendVerificationCode(phoneNumber=phone). Aliyun generates + sends the code.
-        // On a ClientException, log and do NOT throw (the send-code endpoint should degrade gracefully).
-        //
-        // Phase F status: the SDK calls are deliberately left unwired — the confirmed artifact +
-        // method names need the user's real Aliyun 短信认证服务 instance (see the Aliyun activation
-        // runbook in docs/superpowers/PHASE-F-STATUS.md). The dev LoggingVerificationProvider stays
-        // the working default (frame.sms.provider=logging) until the SDK is wired + verified live.
-        // This follows the spec's skip-and-return policy: don't add an unconfirmed dependency.
-        log.info("[Aliyun SMS-auth] send requested for {} ({}) — wire the SDK call (see runbook)", phone, purpose);
+        SmsProperties.Aliyun cfg = props.getAliyun();
+        SendSmsVerifyCodeRequest req = SendSmsVerifyCodeRequest.builder()
+                .phoneNumber(phone)
+                .signName(cfg.getSignName())
+                .templateCode(cfg.getTemplateCode())
+                .codeLength(6L)
+                .validTime(300L)
+                .interval(60L)
+                .build();
+        try {
+            SendSmsVerifyCodeResponse resp = client.sendSmsVerifyCode(req).get();
+            // The dypnsapi response body carries Code/Message (Model holds BizId/RequestId).
+            String code = resp.getBody().getCode();
+            if (!"OK".equals(code)) {
+                log.warn("[Aliyun SMS-auth] send FAILED for {} ({}): code={} message={}",
+                        phone, purpose, code, resp.getBody().getMessage());
+            } else {
+                log.info("[Aliyun SMS-auth] send OK for {} ({}) bizId={}",
+                        phone, purpose, resp.getBody().getModel().getBizId());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("[Aliyun SMS-auth] send interrupted for {} ({})", phone, purpose, e);
+        } catch (ExecutionException e) {
+            // Degrade gracefully: a provider failure must NOT break the send-code endpoint.
+            log.error("[Aliyun SMS-auth] send ERROR for {} ({}): {}", phone, purpose, e.getCause().getMessage());
+        } catch (Exception e) {
+            log.error("[Aliyun SMS-auth] send ERROR for {} ({}) — degrading: {}", phone, purpose, e.getMessage(), e);
+        }
     }
 
     @Override
     public boolean verify(String phone, String code, SmsPurpose purpose) {
-        // TODO(impl): call VerifyVerificationCode(phoneNumber=phone, code=code); return its pass/fail.
-        // Aliyun consumes the code on its side (one-shot). See the runbook in PHASE-F-STATUS.md.
-        log.info("[Aliyun SMS-auth] verify requested for {} ({}) — wire the SDK call (see runbook)", phone, purpose);
-        return false; // fails closed until the SDK is wired — keeps the dev stub as the working default
+        CheckSmsVerifyCodeRequest req = CheckSmsVerifyCodeRequest.builder()
+                .phoneNumber(phone)
+                .verifyCode(code)
+                .build();
+        try {
+            CheckSmsVerifyCodeResponse resp = client.checkSmsVerifyCode(req).get();
+            // CheckSmsVerifyCode returns Code="OK" when the code is correct (Aliyun consumes it one-shot).
+            boolean pass = "OK".equals(resp.getBody().getCode());
+            if (!pass) {
+                log.info("[Aliyun SMS-auth] verify FAIL for {} ({}): code={} message={}",
+                        phone, purpose, resp.getBody().getCode(), resp.getBody().getMessage());
+            }
+            return pass;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("[Aliyun SMS-auth] verify interrupted for {} ({})", phone, purpose, e);
+            return false;
+        } catch (Exception e) {
+            log.error("[Aliyun SMS-auth] verify ERROR for {} ({}) — failing closed: {}",
+                    phone, purpose, e.getMessage(), e);
+            return false; // fail closed — never accept a code on a provider error
+        }
     }
 }

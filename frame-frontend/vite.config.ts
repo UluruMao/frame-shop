@@ -5,6 +5,12 @@ import path from 'node:path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // sockjs-client@1.x references the Node-only `global` global, which is undefined in
+  // the browser → "Uncaught ReferenceError: global is not defined" crashes the whole
+  // app on first render. Polyfill it to `globalThis` (the browser's global object).
+  define: {
+    global: 'globalThis',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
