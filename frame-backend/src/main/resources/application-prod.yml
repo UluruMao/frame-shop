@@ -54,6 +54,17 @@ frame:
     dir: /var/lib/frame/uploads
   rate-limit:
     checkout-per-minute: 10
+  sms:
+    # provider 切换：logging（dev stub，不真发短信）/ aliyun（真实短信认证服务）。
+    # VM 上用 systemd Environment=FRAME_SMS_PROVIDER=aliyun 注入，不在此处硬编码。
+    provider: ${FRAME_SMS_PROVIDER:logging}
+    aliyun:
+      # 全部走环境变量——凭据不进代码库。VM 上填到 frame-backend.service 的 Environment= 行。
+      access-key-id: ${FRAME_SMS_AK_ID:}
+      access-key-secret: ${FRAME_SMS_AK_SECRET:}
+      region: ${FRAME_SMS_REGION:cn-hangzhou}
+      sign-name: ${FRAME_SMS_SIGN_NAME:}
+      template-code: ${FRAME_SMS_TEMPLATE_CODE:}
 
 logging:
   level:

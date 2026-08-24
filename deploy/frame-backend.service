@@ -20,6 +20,13 @@ Environment=FRAME_DB_PASSWORD=change_me_in_prod
 Environment=FRAME_JWT_SECRET=change_me_to_a_long_random_base64_secret_at_least_256_bits
 Environment=FRAME_REDIS_PASSWORD=
 Environment=FRAME_CORS_ORIGINS=http://192.168.1.105
+# Aliyun 短信认证服务 (dypnsapi) — 填真实值后重启 frame-backend。
+# provider=aliyun 启用真实短信；不填则用 logging stub（不真发短信）。
+Environment=FRAME_SMS_PROVIDER=aliyun
+Environment=FRAME_SMS_AK_ID=你的RAM_AccessKeyId
+Environment=FRAME_SMS_AK_SECRET=你的RAM_AccessKeySecret
+Environment=FRAME_SMS_SIGN_NAME=恒创联众
+Environment=FRAME_SMS_TEMPLATE_CODE=100001
 
 [Install]
 WantedBy=multi-user.target
