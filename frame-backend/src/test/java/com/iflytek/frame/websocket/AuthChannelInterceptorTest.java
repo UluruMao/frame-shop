@@ -1,6 +1,8 @@
 package com.iflytek.frame.websocket;
 
 import com.iflytek.frame.common.Role;
+import com.iflytek.frame.entity.ChatSession;
+import com.iflytek.frame.mapper.ChatSessionMapper;
 import com.iflytek.frame.security.JwtUtil;
 import com.iflytek.frame.security.SecurityUser;
 import io.jsonwebtoken.Claims;
@@ -25,6 +27,7 @@ class AuthChannelInterceptorTest {
 
     @Mock JwtUtil jwtUtil;
     @Mock AdminPresenceRegistry presenceRegistry;
+    @Mock ChatSessionMapper sessionMapper;
     @Mock MessageChannel channel;
     @InjectMocks AuthChannelInterceptor interceptor;
 
@@ -110,5 +113,89 @@ class AuthChannelInterceptorTest {
         interceptor.afterSendCompletion(msg, channel, true, null);
 
         verify(presenceRegistry, never()).onAdminDisconnect(any());
+    }
+
+    // ---- SUBSCRIBE ownership checks (delivery fan-out IDOR closure) ----
+
+    @Test
+    void subscribe_ownerUser_isAllowed() {
+        Long ownerId = 5L;
+        SecurityUser owner = new SecurityUser(ownerId, "alice", Role.USER,
+                List.of(new SecurityUser.Authority("ROLE_USER")));
+        ChatSession session = new ChatSession();
+        session.setId(7L);
+        session.setUserId(ownerId);
+        when(sessionMapper.selectById(7L)).thenReturn(session);
+
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/topic/session/7");
+        accessor.setUser(owner);
+        accessor.setLeaveMutable(true);
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        // returns the message (subscription proceeds); does not throw
+        Message<?> result = interceptor.preSend(msg, channel);
+        assertNotNull(result);
+    }
+
+    @Test
+    void subscribe_nonOwnerUser_isRejected() {
+        Long ownerId = 5L;
+        Long intruderId = 999L;
+        SecurityUser intruder = new SecurityUser(intruderId, "mallory", Role.USER,
+                List.of(new SecurityUser.Authority("ROLE_USER")));
+        ChatSession session = new ChatSession();
+        session.setId(7L);
+        session.setUserId(ownerId); // owner is 5, subscriber is 999
+        when(sessionMapper.selectById(7L)).thenReturn(session);
+
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/topic/session/7");
+        accessor.setUser(intruder);
+        accessor.setLeaveMutable(true);
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        assertThrows(org.springframework.messaging.MessagingException.class,
+                () -> interceptor.preSend(msg, channel));
+    }
+
+    @Test
+    void subscribe_admin_isAllowedOnAnySession() {
+        Long adminId = 42L;
+        Long otherUserId = 5L;
+        SecurityUser admin = new SecurityUser(adminId, "admin", Role.ADMIN,
+                List.of(new SecurityUser.Authority("ROLE_ADMIN")));
+        ChatSession session = new ChatSession();
+        session.setId(7L);
+        session.setUserId(otherUserId); // admin is NOT the owner
+        // admin path must not even hit the mapper — no stubbing needed; the
+        // absence of a when(...) means any selectById call would throw (lenient
+        // stubbing) — but it's never called, which is the point.
+
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/topic/session/7");
+        accessor.setUser(admin);
+        accessor.setLeaveMutable(true);
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        Message<?> result = interceptor.preSend(msg, channel);
+        assertNotNull(result);
+        verify(sessionMapper, never()).selectById(any()); // admin bypasses the lookup
+    }
+
+    @Test
+    void subscribe_nonExistentSession_isRejected() {
+        SecurityUser user = new SecurityUser(5L, "alice", Role.USER,
+                List.of(new SecurityUser.Authority("ROLE_USER")));
+        when(sessionMapper.selectById(99L)).thenReturn(null); // session doesn't exist
+
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/topic/session/99");
+        accessor.setUser(user);
+        accessor.setLeaveMutable(true);
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        assertThrows(org.springframework.messaging.MessagingException.class,
+                () -> interceptor.preSend(msg, channel));
     }
 }
