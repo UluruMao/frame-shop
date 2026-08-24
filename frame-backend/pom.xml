@@ -38,6 +38,12 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- WebSocket: STOMP broker + @EnableWebSocketMessageBroker infrastructure for UC011 live chat -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
         <!-- AOP: @Aspect / @Around for the operation-log aspect (NFR op-log).
              Brings spring-aop + aspectjweaver; not transitive from starter-web.
              In Spring Boot 4.x the starter is named spring-boot-starter-aspectj
