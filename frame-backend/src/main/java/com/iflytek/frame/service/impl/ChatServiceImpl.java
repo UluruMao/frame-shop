@@ -14,6 +14,7 @@ import com.iflytek.frame.mapper.ChatSessionMapper;
 import com.iflytek.frame.service.ChatService;
 import com.iflytek.frame.websocket.AdminPresenceRegistry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,18 +32,32 @@ public class ChatServiceImpl implements ChatService {
     @Override
     @Transactional
     public ChatSessionVO findOrCreateOpenSession(Long userId) {
-        ChatSession session = sessionMapper.selectOne(
-                new LambdaQueryWrapper<ChatSession>()
-                        .eq(ChatSession::getUserId, userId)
-                        .eq(ChatSession::getStatus, "OPEN")
-                        .last("LIMIT 1"));
+        ChatSession session = findOpenSession(userId);
         if (session == null) {
             session = new ChatSession();
             session.setUserId(userId);
             session.setStatus("OPEN");
-            sessionMapper.insert(session);
+            try {
+                sessionMapper.insert(session);
+            } catch (DataIntegrityViolationException e) {
+                // Concurrent find-or-create raced: the unique index uk_session_open_user
+                // (open_user_key = user_id when OPEN) rejected our duplicate. The other
+                // transaction already created the session, so re-select and return it.
+                session = findOpenSession(userId);
+                if (session == null) {
+                    throw e; // shouldn't happen, but fail loud rather than return null
+                }
+            }
         }
         return toSessionVO(session);
+    }
+
+    private ChatSession findOpenSession(Long userId) {
+        return sessionMapper.selectOne(
+                new LambdaQueryWrapper<ChatSession>()
+                        .eq(ChatSession::getUserId, userId)
+                        .eq(ChatSession::getStatus, "OPEN")
+                        .last("LIMIT 1"));
     }
 
     @Override
@@ -67,6 +82,13 @@ public class ChatServiceImpl implements ChatService {
             throw new BusinessException(ResultCode.NOT_FOUND, "chat session not found: " + sessionId);
         }
         return persistMessage(session, "ADMIN", adminId, content, imageUrl);
+    }
+
+    @Override
+    public PageResult<ChatMessageVO> historyForUser(Long sessionId, Long userId, int page, int size) {
+        // ownership check BEFORE paginating — closes the IDOR hole
+        loadAndCheckOwnership(sessionId, userId);
+        return history(sessionId, page, size);
     }
 
     @Override

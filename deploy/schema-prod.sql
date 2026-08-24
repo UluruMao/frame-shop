@@ -68,13 +68,17 @@ CREATE TABLE IF NOT EXISTS `order_item` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `chat_session` (
-    `id`          BIGINT       NOT NULL AUTO_INCREMENT,
-    `user_id`     BIGINT       NOT NULL,
-    `admin_id`    BIGINT,
-    `status`      VARCHAR(16)  NOT NULL DEFAULT 'OPEN',
-    `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    `update_time` DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `id`            BIGINT       NOT NULL AUTO_INCREMENT,
+    `user_id`       BIGINT       NOT NULL,
+    `admin_id`      BIGINT,
+    `status`        VARCHAR(16)  NOT NULL DEFAULT 'OPEN',
+    `create_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    `update_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    -- At most one OPEN session per user: open_user_key = user_id when OPEN else NULL.
+    -- NULLs don't collide in a unique index, so CLOSED rows are unconstrained.
+    `open_user_key` BIGINT AS (IF(status='OPEN', user_id, NULL)) VIRTUAL,
     PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_session_open_user` (`open_user_key`),
     INDEX `idx_session_user` (`user_id`),
     INDEX `idx_session_admin` (`admin_id`),
     INDEX `idx_session_status` (`status`)
@@ -88,6 +92,7 @@ CREATE TABLE IF NOT EXISTS `chat_message` (
     `content`     TEXT         NOT NULL,
     `image_url`   VARCHAR(512),
     `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     INDEX `idx_msg_session` (`session_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
