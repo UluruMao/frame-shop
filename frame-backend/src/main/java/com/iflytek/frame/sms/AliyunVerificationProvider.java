@@ -36,14 +36,20 @@ public class AliyunVerificationProvider implements VerificationCodeProvider {
         // 短信认证服务 SDK) using props.getAliyun().getAccessKeyId()/Secret/Region/ServiceCode,
         // then call SendVerificationCode(phoneNumber=phone). Aliyun generates + sends the code.
         // On a ClientException, log and do NOT throw (the send-code endpoint should degrade gracefully).
-        log.info("[Aliyun SMS-auth] send requested for {} ({}) — wire the SDK call", phone, purpose);
+        //
+        // Phase F status: the SDK calls are deliberately left unwired — the confirmed artifact +
+        // method names need the user's real Aliyun 短信认证服务 instance (see the Aliyun activation
+        // runbook in docs/superpowers/PHASE-F-STATUS.md). The dev LoggingVerificationProvider stays
+        // the working default (frame.sms.provider=logging) until the SDK is wired + verified live.
+        // This follows the spec's skip-and-return policy: don't add an unconfirmed dependency.
+        log.info("[Aliyun SMS-auth] send requested for {} ({}) — wire the SDK call (see runbook)", phone, purpose);
     }
 
     @Override
     public boolean verify(String phone, String code, SmsPurpose purpose) {
         // TODO(impl): call VerifyVerificationCode(phoneNumber=phone, code=code); return its pass/fail.
-        // Aliyun consumes the code on its side (one-shot).
-        log.info("[Aliyun SMS-auth] verify requested for {} ({}) — wire the SDK call", phone, purpose);
+        // Aliyun consumes the code on its side (one-shot). See the runbook in PHASE-F-STATUS.md.
+        log.info("[Aliyun SMS-auth] verify requested for {} ({}) — wire the SDK call (see runbook)", phone, purpose);
         return false; // fails closed until the SDK is wired — keeps the dev stub as the working default
     }
 }

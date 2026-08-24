@@ -92,6 +92,7 @@ public class StreamConsumerService {
     private final ProductMapper productMapper;
     private final StockGateService stockGateService;
     private final CoinService coinService;
+    private final ProductService productService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Thread pool for parallel order processing — bounded by HikariCP pool (max 50).
@@ -122,13 +123,15 @@ public class StreamConsumerService {
                                   OrderItemMapper orderItemMapper,
                                   ProductMapper productMapper,
                                   StockGateService stockGateService,
-                                  CoinService coinService) {
+                                  CoinService coinService,
+                                  ProductService productService) {
         this.redis = redis;
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.productMapper = productMapper;
         this.stockGateService = stockGateService;
         this.coinService = coinService;
+        this.productService = productService;
     }
 
     @Autowired
@@ -282,6 +285,7 @@ public class StreamConsumerService {
                     int qty = item.get("quantity").asInt();
                     stockGateService.recredit(pid, qty);
                 }
+                invalidateListCacheSafe();
                 throw dup;
             }
 
@@ -297,6 +301,7 @@ public class StreamConsumerService {
                     stockGateService.recredit(pid, qty);
                     redis.delete("seckill:" + pid + ":" + userId);
                     redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
+                    invalidateListCacheSafe();
                     return;
                 }
                 Product p = productMapper.selectById(pid);
@@ -310,6 +315,9 @@ public class StreamConsumerService {
                 redis.opsForValue().set("seckill:" + pid + ":" + userId, "1",
                         3600, TimeUnit.SECONDS);
             }
+            // The per-item decrementStock loop above mutated product.stock in the DB; clear the
+            // list cache so the list path serves fresh stock (the cache would otherwise be stale ≤30s).
+            invalidateListCacheSafe();
 
             // UC005: deduct coins atomically with the order (only if the order will actually exist —
             // the stock backstop above already succeeded, so the order is durable). spendAtCheckout
@@ -344,6 +352,7 @@ public class StreamConsumerService {
                     redis.opsForValue().set("order_id_map:" + payloadOrderId,
                             String.valueOf(order.getId()));
                     redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
+                    invalidateListCacheSafe();
                     return;
                 }
                 try {
@@ -364,6 +373,7 @@ public class StreamConsumerService {
                         redis.opsForValue().set("order_id_map:" + payloadOrderId,
                                 String.valueOf(order.getId()));
                         redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
+                        invalidateListCacheSafe();
                         return;
                     }
                     throw coinFail;
@@ -376,6 +386,20 @@ public class StreamConsumerService {
             throw rethrow;
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Clear the product list cache after the consumer's DB-backstop stock paths
+     * ({@code decrementStock} on success, {@code recredit} on FAILED/rollback) mutate
+     * {@code product.stock} without going through {@code ProductService}'s own methods.
+     * Redis down is non-fatal (the cache just serves stale data for ≤30s, then self-heals on TTL).
+     */
+    private void invalidateListCacheSafe() {
+        try {
+            productService.invalidateListCache();
+        } catch (Exception e) {
+            log.warn("list-cache invalidation after stock mutation failed (non-fatal): {}", e.getMessage());
         }
     }
 

@@ -83,24 +83,20 @@ export const suite = {
   tests: [
     {
       name: 'setup: login admin (used as both admin + user token)',
-      // The SMS-gated /auth/register (UC001) needs a real verification code, which the e2e
-      // harness can't obtain without driving the SMS flow — a pre-existing gap flagged as
-      // out of scope for Phase C (the auth suite's register test fails with the same 500).
       // The admin user is a valid authenticated principal, and /orders/** + /checkout only
       // require authentication (SecurityConfig: anyRequest().authenticated()), so admin's
       // token legitimately exercises the user-side order flows. Orders are owned by admin's
       // userId; the seckill one-per-user gate and CAS transitions behave identically.
+      // This suite uses admin as its principal (not the registered ctx.userToken) so its
+      // checkouts don't share the registered user's per-user /checkout rate-limit bucket
+      // (RateLimitFilter: 10/user/60s) with the checkout suite.
       run: async (ctx) => {
         if (!ctx.adminToken) {
           const a = await http.post('/auth/login', env.ADMIN)
           assert(a.status === 200, `admin login expected 200, got ${a.status}`)
           ctx.adminToken = a.body.data.token
         }
-        // ctx.userToken is normally set by an earlier suite's register+login; if not, use
-        // admin's token (see comment above) so the order flows still run.
-        if (!ctx.userToken) {
-          ctx.userToken = ctx.adminToken
-        }
+        ctx.userToken = ctx.adminToken
         ctx.ordersProductIds = []
       },
     },

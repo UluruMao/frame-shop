@@ -61,16 +61,25 @@ public class CheckoutServiceImpl implements CheckoutService {
             new HashSet<>(Arrays.asList("WECHAT", "ALIPAY", "BANK_CARD"));
 
     /**
-     * Unique-per-JVM correlation-id generator. Seeded from millis; each call increments.
-     * This MUST be unique per checkout call: the orderId is the XADD stream-entry field
-     * value AND the key suffix for {@code order_status:{orderId}} / {@code order_id_map:{orderId}}.
-     * If two checkouts share an orderId, (a) the Redis status/map keys collide (status aliasing),
-     * and (b) Spring Data Redis's stream deserialization confuses entries that share a field value,
-     * causing the consumer to read the wrong payload for a record (order loss). Unique per call
-     * eliminates both. The Order row's DB PK is separate (AUTO_INCREMENT) — this is only the
-     * correlation id the client polls.
+     * Unique-per-JVM correlation-id generator. Seeded from millis + a per-JVM random
+     * offset; each call increments. This MUST be unique per checkout call: the orderId is
+     * the XADD stream-entry field value AND the key suffix for
+     * {@code order_status:{orderId}} / {@code order_id_map:{orderId}}. If two checkouts
+     * share an orderId, (a) the Redis status/map keys collide (status aliasing), and
+     * (b) Spring Data Redis's stream deserialization confuses entries that share a field
+     * value, causing the consumer to read the wrong payload for a record (order loss).
+     * Unique per call eliminates both. The Order row's DB PK is separate (AUTO_INCREMENT)
+     * — this is only the correlation id the client polls.
+     *
+     * <p>The seed mixes {@code System.currentTimeMillis()*1000} with a
+     * {@link java.security.SecureRandom} offset so that a JVM restart within ~16min (which
+     * would otherwise produce a millis-based seed close to the prior run's counter range,
+     * and resets the counter) cannot overlap prior-run IDs — the random offset differs
+     * per JVM, pushing the seed out of the prior run's sequence window.
      */
-    private static final AtomicLong ORDER_SEQ = new AtomicLong(System.currentTimeMillis() * 1000);
+    private static final java.security.SecureRandom ORDER_SEQ_RNG = new java.security.SecureRandom();
+    private static final AtomicLong ORDER_SEQ =
+            new AtomicLong(System.currentTimeMillis() * 1000 + ORDER_SEQ_RNG.nextInt(1_000_000));
 
     @Override
     public CheckoutResponse checkout(CheckoutRequest request, Long userId) {

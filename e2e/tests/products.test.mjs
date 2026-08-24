@@ -8,7 +8,7 @@ export const suite = {
     {
       name: 'login the registered user (sets userToken for checkout tests)',
       run: async (ctx) => {
-        const res = await http.post('/auth/login', { username: ctx.username, password: 'pass1234' })
+        const res = await http.post('/auth/login', { username: ctx.username, password: 'Pass1234!' })
         assert(res.status === 200, `expected 200, got ${res.status}`)
         ctx.userToken = res.body.data.token
       },

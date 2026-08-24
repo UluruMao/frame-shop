@@ -120,6 +120,14 @@ public class SecurityConfig {
                                 "/admin/orders/{id}/ship", "/admin/orders/{id}/deliver",
                                 "/admin/refunds/{orderId}/approve", "/admin/refunds/{orderId}/deny")
                                 .hasRole("ADMIN")
+                        // WebSocket handshake endpoint — auth happens in the ChannelInterceptor,
+                        // not Spring Security's filter chain, so permit the HTTP upgrade.
+                        .requestMatchers("/ws-chat/**").permitAll()
+                        // user chat REST endpoints (UC011)
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/chat/sessions").hasRole("USER")
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/chat/sessions/**").hasRole("USER")
+                        // admin chat REST endpoints (UC011)
+                        .requestMatchers("/admin/chat/**").hasRole("ADMIN")
                         // everything else requires authentication
                         .anyRequest().authenticated())
                 .exceptionHandling(eh -> eh

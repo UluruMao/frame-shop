@@ -13,6 +13,7 @@ import Orders from '@/pages/Orders'
 import Coins from '@/pages/Coins'
 import Admin from '@/pages/Admin'
 import Profile from '@/pages/Profile'
+import Chat from '@/pages/Chat'
 
 const routes: RouteObject[] = [
   { path: '/login', element: <Login /> },
@@ -39,6 +40,7 @@ const routes: RouteObject[] = [
       { path: 'orders', element: <RequireAuth><Orders /></RequireAuth> },
       { path: 'coins', element: <RequireAuth><Coins /></RequireAuth> },
       { path: 'profile', element: <RequireAuth><Profile /></RequireAuth> },
+      { path: 'chat', element: <RequireAuth><Chat /></RequireAuth> },
       { path: 'admin', element: <RequireAuth><Admin /></RequireAuth> },
     ],
   },

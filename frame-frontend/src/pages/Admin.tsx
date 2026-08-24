@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Shield, Zap, Pencil, Trash2, Plus, Loader2, Package, CheckCheck, RefreshCw } from 'lucide-react'
+import { Shield, Zap, Pencil, Trash2, Plus, Loader2, Package, CheckCheck, RefreshCw, MessageCircle } from 'lucide-react'
 import {
   pageProducts,
   createProduct,
@@ -15,6 +15,8 @@ import {
   adminApproveRefund,
   adminDenyRefund,
 } from '@/api/order'
+import { adminInbox, adminHistory, type ChatSessionVO, type ChatMessageVO } from '@/api/chat'
+import { useChat } from '@/hooks/useChat'
 import type { Order, OrderStatus, Product } from '@/api/types'
 import { formatPrice } from './Products'
 import { useIsAdmin } from '@/store/useAuthStore'
@@ -32,8 +34,8 @@ const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
   REFUNDED: 'bg-red-100 text-red-700',
 }
 
-/** Top-level Admin tabs: Products (CRUD) and Orders (shipping/refund). */
-type AdminTab = 'products' | 'orders'
+/** Top-level Admin tabs: Products (CRUD), Orders (shipping/refund), and Chat (inbox). */
+type AdminTab = 'products' | 'orders' | 'chat'
 
 /** Status-filter options for the admin orders table. */
 const ORDER_STATUS_FILTERS: { label: string; value?: OrderStatus }[] = [
@@ -115,6 +117,12 @@ export default function Admin() {
   const [refunds, setRefunds] = useState<Order[]>([])
   const [refundsLoading, setRefundsLoading] = useState(false)
   const [refundsError, setRefundsError] = useState<string | null>(null)
+
+  // --- Chat inbox tab state ---
+  const [inbox, setInbox] = useState<ChatSessionVO[]>([])
+  const [inboxLoading, setInboxLoading] = useState(false)
+  const [inboxError, setInboxError] = useState<string | null>(null)
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null)
 
   async function load() {
     setLoading(true)
@@ -292,6 +300,27 @@ export default function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, tab])
 
+  // --- Chat inbox tab ---
+
+  async function loadInbox() {
+    setInboxLoading(true)
+    setInboxError(null)
+    try {
+      const sessions = await adminInbox()
+      setInbox(sessions)
+    } catch (err) {
+      setInboxError(err instanceof Error ? err.message : 'failed to load inbox')
+    } finally {
+      setInboxLoading(false)
+    }
+  }
+
+  // Load the open sessions whenever the chat tab is shown.
+  useEffect(() => {
+    if (isAdmin && tab === 'chat') void loadInbox()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, tab])
+
   async function handleApproveRefund(orderId: number) {
     setBusyOrderId(orderId)
     setRefundsError(null)
@@ -329,6 +358,9 @@ export default function Admin() {
         {tab === 'orders' && (
           <span className="text-sm text-slate-400">({ordersTotal} orders)</span>
         )}
+        {tab === 'chat' && (
+          <span className="text-sm text-slate-400">({inbox.length} open sessions)</span>
+        )}
       </div>
 
       {/* Tab switcher */}
@@ -356,6 +388,18 @@ export default function Admin() {
         >
           <Package className="w-3.5 h-3.5" />
           Orders
+        </button>
+        <button
+          onClick={() => setTab('chat')}
+          className={[
+            'px-3 py-2 text-sm border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+            tab === 'chat'
+              ? 'border-brand-600 text-brand-600 font-medium'
+              : 'border-transparent text-slate-600 hover:text-slate-800',
+          ].join(' ')}
+        >
+          <MessageCircle className="w-3.5 h-3.5" />
+          Chat
         </button>
       </div>
 
@@ -721,6 +765,151 @@ export default function Admin() {
           </section>
         </div>
       )}
+
+      {/* --- Chat inbox tab --- */}
+      {tab === 'chat' && (
+        <div className="space-y-4">
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-4 h-4 text-brand-600" />
+              <h2 className="text-sm font-medium text-slate-700">Open sessions</h2>
+              <button
+                onClick={() => { void loadInbox() }}
+                className="ml-auto text-xs text-slate-500 hover:text-slate-800"
+              >
+                Refresh
+              </button>
+            </div>
+            {inboxError && <p className="text-sm text-red-600">{inboxError}</p>}
+            {inboxLoading ? (
+              <p className="text-sm text-slate-500">Loading…</p>
+            ) : inbox.length === 0 ? (
+              <p className="text-sm text-slate-400">No open chat sessions.</p>
+            ) : (
+              <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium">Session</th>
+                      <th className="text-left px-4 py-2 font-medium">User</th>
+                      <th className="text-left px-4 py-2 font-medium">Status</th>
+                      <th className="text-left px-4 py-2 font-medium">Created</th>
+                      <th className="text-right px-4 py-2 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inbox.map((s) => (
+                      <tr key={s.id} className="border-t border-slate-100">
+                        <td className="px-4 py-2 text-slate-500">#{s.id}</td>
+                        <td className="px-4 py-2 text-slate-800">user #{s.userId}</td>
+                        <td className="px-4 py-2">
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                            {s.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-xs text-slate-600">
+                          {s.createTime
+                            ? new Date(s.createTime).toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <button
+                            onClick={() => setSelectedSessionId(s.id)}
+                            className="text-xs text-brand-600 hover:underline"
+                          >
+                            {selectedSessionId === s.id ? 'Selected' : 'Open'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Reply panel for the selected session. Rendered as a separate
+              component so useChat(sessionId) is called unconditionally inside
+              it (Rules of Hooks) — the parent gates rendering, not the hook. */}
+          {selectedSessionId !== null && (
+            <ChatReplyPanel sessionId={selectedSessionId} />
+          )}
+        </div>
+      )}
     </div>
+  )
+}
+
+/**
+ * Admin reply panel for a single chat session. Loads history via adminHistory,
+ * then useChat(sessionId) subscribes to the live topic so the admin sees new
+ * messages. Reply input sends to /app/chat/{sessionId} (same destination as the
+ * user; the backend tags admin messages with senderType=ADMIN).
+ */
+function ChatReplyPanel({ sessionId }: { sessionId: number }) {
+  const { messages, send, connected, setMessages } = useChat(sessionId)
+  const [input, setInput] = useState('')
+  const [historyLoading, setHistoryLoading] = useState(true)
+
+  useEffect(() => {
+    setHistoryLoading(true)
+    adminHistory(sessionId)
+      .then((r) => setMessages(r.records))
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (!input.trim()) return
+    send(input.trim(), null)
+    setInput('')
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-medium text-slate-700">Session #{sessionId}</h2>
+        <span className="text-xs text-slate-400">{connected ? '已连接' : '连接中…'}</span>
+      </div>
+      <div className="h-80 overflow-y-auto rounded border border-slate-200 p-3 bg-slate-50">
+        {historyLoading && <p className="text-sm text-slate-500">Loading history…</p>}
+        {messages.map((m: ChatMessageVO) => (
+          <div key={m.id} className={`mb-2 ${m.senderType === 'ADMIN' ? 'text-right' : 'text-left'}`}>
+            <span
+              className={`inline-block rounded px-3 py-1 ${
+                m.senderType === 'ADMIN' ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-800'
+              }`}
+            >
+              {m.content}
+            </span>
+          </div>
+        ))}
+        {!historyLoading && messages.length === 0 && (
+          <p className="text-sm text-slate-400 text-center">No messages yet.</p>
+        )}
+      </div>
+      <form onSubmit={submit} className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          placeholder="回复消息…"
+        />
+        <button
+          type="submit"
+          disabled={!connected}
+          className="rounded-md bg-brand-600 px-4 py-2 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+        >
+          发送
+        </button>
+      </form>
+    </section>
   )
 }

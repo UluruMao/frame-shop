@@ -19,6 +19,14 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ''),
       },
+      // SockJS endpoint for the STOMP chat client (UC011). SockJS starts with an
+      // HTTP handshake then upgrades to WebSocket, so the proxy must forward both
+      // HTTP and the WS upgrade (ws: true).
+      '/ws-chat': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
 })

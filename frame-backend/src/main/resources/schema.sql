@@ -4,6 +4,8 @@ CREATE DATABASE IF NOT EXISTS frame_db
 
 USE frame_db;
 
+DROP TABLE IF EXISTS `chat_message`;
+DROP TABLE IF EXISTS `chat_session`;
 DROP TABLE IF EXISTS `operation_log`;
 DROP TABLE IF EXISTS `order_item`;
 DROP TABLE IF EXISTS `review`;
@@ -147,6 +149,36 @@ CREATE TABLE `coin_ledger` (
     KEY `idx_coin_expire` (`expires_at`),
     KEY `idx_coin_order` (`ref_order_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `chat_session` (
+    `id`            BIGINT       NOT NULL AUTO_INCREMENT,
+    `user_id`       BIGINT       NOT NULL,
+    `admin_id`      BIGINT,
+    `status`        VARCHAR(16)  NOT NULL DEFAULT 'OPEN',
+    `create_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    `update_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    -- At most one OPEN session per user: open_user_key = user_id when OPEN else NULL.
+    -- NULLs don't collide in a unique index, so CLOSED rows are unconstrained.
+    `open_user_key` BIGINT AS (IF(status='OPEN', user_id, NULL)) VIRTUAL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_session_open_user` (`open_user_key`),
+    INDEX `idx_session_user` (`user_id`),
+    INDEX `idx_session_admin` (`admin_id`),
+    INDEX `idx_session_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `chat_message` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+    `session_id`  BIGINT       NOT NULL,
+    `sender_type` VARCHAR(16)  NOT NULL,
+    `sender_id`   BIGINT       NOT NULL,
+    `content`     TEXT         NOT NULL,
+    `image_url`   VARCHAR(512),
+    `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `idx_msg_session` (`session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO `user` (`username`, `password_hash`, `role`, `phone`) VALUES
     ('admin', '$2a$10$7FzLk9ItV8zh8fPkg9WJKuTOy.cxJ61NXxGVmYaSAGg9RlBxYYfKC', 'ADMIN', '13800000000');

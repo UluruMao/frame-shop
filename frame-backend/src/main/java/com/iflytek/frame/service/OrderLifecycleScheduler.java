@@ -59,7 +59,7 @@ public class OrderLifecycleScheduler {
     }
 
     /** Auto-complete DELIVERED orders older than completeAfterDays. */
-    @Scheduled(cron = "0 7 4 * * *")   // daily 4:07am, off the :00 herd
+    @Scheduled(cron = "0 7 4 * * *", zone = "Asia/Shanghai")   // daily 4:07am CST, off the :00 herd
     public void autoCompleteOrders() {
         try {
             LocalDateTime cutoff = LocalDateTime.now().minusDays(completeAfterDays);
@@ -77,7 +77,7 @@ public class OrderLifecycleScheduler {
     }
 
     /** UC012 §3: daily sweep of coins past their 30-day clock (4:01am CST, off the :00 herd). */
-    @Scheduled(cron = "1 1 4 * * *")
+    @Scheduled(cron = "1 1 4 * * *", zone = "Asia/Shanghai")
     public void sweepExpiredCoins() {
         try {
             coinService.sweepExpiredCredits();

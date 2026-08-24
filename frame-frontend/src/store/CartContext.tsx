@@ -23,7 +23,15 @@ function loadInitial(): CartState {
     if (!raw) return { items: [] }
     const parsed = JSON.parse(raw) as CartState
     if (!parsed || !Array.isArray(parsed.items)) return { items: [] }
-    return parsed
+    // Normalize stale localStorage carts: older items may predate the isFlashSale field
+    // (added with flash-sale coin gating, UC012). Default to false so the type contract
+    // (isFlashSale: boolean) holds and Checkout's hasFlash check doesn't read undefined.
+    return {
+      items: parsed.items.map((item) => ({
+        ...item,
+        isFlashSale: item.isFlashSale ?? false,
+      })),
+    }
   } catch {
     return { items: [] }
   }

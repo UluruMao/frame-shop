@@ -34,6 +34,7 @@ class StreamConsumerServiceTest {
     @Mock ProductMapper productMapper;
     @Mock StockGateService stockGateService;
     @Mock CoinService coinService;
+    @Mock ProductService productService;
     @Mock ValueOperations<String, String> valueOps;
 
     private StreamConsumerService service;
@@ -41,7 +42,7 @@ class StreamConsumerServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StreamConsumerService(redis, orderMapper, orderItemMapper, productMapper, stockGateService, coinService);
+        service = new StreamConsumerService(redis, orderMapper, orderItemMapper, productMapper, stockGateService, coinService, productService);
         TransactionSynchronizationManager.initSynchronization();
     }
 
