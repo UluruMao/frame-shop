@@ -22,6 +22,21 @@ import { registerWithCode } from '../lib/sms.mjs'
 // check keys on the authenticated userId, so user A vs user B must be distinct
 // real users for the 403 assertion to be meaningful. Admin logs in via env.ADMIN
 // like the other suites.
+//
+// NOTE: registerWithCode returns the register response, whose `data` is the user
+// object WITHOUT a token (the backend's /auth/register returns the created user,
+// not a token). To get a usable JWT, login with the freshly-registered credentials.
+
+// Register a user AND obtain a login token for them. Returns { token, userId }.
+async function registerAndLogin(http, suffix) {
+  const username = 'chat' + suffix + Date.now()
+  const password = 'Pass1234!'
+  const reg = await registerWithCode(http, { username, password })
+  assert(reg.status === 200, `register expected 200, got ${reg.status}`)
+  const login = await http.post('/auth/login', { username, password })
+  assert(login.status === 200, `login expected 200, got ${login.status}`)
+  return { token: login.body.data.token, userId: login.body.data.userId, username }
+}
 
 export const suite = {
   name: 'chat',
@@ -39,12 +54,7 @@ export const suite = {
     {
       name: 'UC011 user opens a chat session → 200 + id',
       run: async (ctx) => {
-        const reg = await registerWithCode(http, {
-          username: 'chat' + Date.now(),
-          password: 'Pass1234!',
-        })
-        assert(reg.status === 200, `register expected 200, got ${reg.status}`)
-        const token = reg.body.data.token
+        const { token, userId } = await registerAndLogin(http, 'a')
         const res = await http.post('/chat/sessions', {}, { token })
         assert(res.status === 200, `expected 200 opening session, got ${res.status}`)
         assert(res.body.data && res.body.data.id, 'expected session id present')
@@ -81,12 +91,7 @@ export const suite = {
         // FORBIDDEN when the session exists but belongs to another user, so the
         // expected status is 403. (404 would only happen if the session id didn't
         // exist — tolerated defensively per the brief.)
-        const regB = await registerWithCode(http, {
-          username: 'chat2' + Date.now(),
-          password: 'Pass1234!',
-        })
-        assert(regB.status === 200, `register B expected 200, got ${regB.status}`)
-        const tokenB = regB.body.data.token
+        const { token: tokenB } = await registerAndLogin(http, 'b')
         const res = await http.get(
           `/chat/sessions/${ctx.chatSessionId}/messages?page=1&size=50`,
           { token: tokenB })
