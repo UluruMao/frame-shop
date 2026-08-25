@@ -83,14 +83,14 @@ import { describe, it, expect } from 'vitest'
 import { formatPrice, cn } from '@/lib/format'
 
 describe('formatPrice', () => {
-  it('formats integer cents as $dollars.cents', () => {
-    expect(formatPrice(1299)).toBe('$12.99')
-    expect(formatPrice(0)).toBe('$0.00')
-    expect(formatPrice(5)).toBe('$0.05')
-    expect(formatPrice(100)).toBe('$1.00')
+  it('formats integer cents as ¥yuan.cents', () => {
+    expect(formatPrice(1299)).toBe('¥12.99')
+    expect(formatPrice(0)).toBe('¥0.00')
+    expect(formatPrice(5)).toBe('¥0.05')
+    expect(formatPrice(100)).toBe('¥1.00')
   })
   it('handles large values', () => {
-    expect(formatPrice(123456789)).toBe('$1,234,567.89')
+    expect(formatPrice(123456789)).toBe('¥1,234,567.89')
   })
 })
 
@@ -118,12 +118,12 @@ Expected: FAIL — `Failed to resolve import "@/lib/format"` (module not found).
 // frame-frontend/src/lib/format.ts
 
 /**
- * Format integer cents as a dollar string: 1299 → "$12.99".
- * Mirrors what pages used to inline as `¥{(priceInCents / 100).toFixed(2)}`,
- * but keeps the "$" prefix the codebase already used in Products.tsx:81.
+ * Format integer cents as a CNY string: 1299 → "¥12.99".
+ * Canonical money formatter for the whole app — CNY (¥), per user decision.
+ * Replaces what pages used to inline as `¥{(priceInCents / 100).toFixed(2)}`.
  */
 export function formatPrice(priceInCents: number): string {
-  return `$${(priceInCents / 100).toLocaleString('en-US', {
+  return `¥${(priceInCents / 100).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`
@@ -139,7 +139,7 @@ export function cn(...classes: Array<string | false | null | undefined>): string
 }
 ```
 
-> ⚠ **Behavior note for the executor:** the existing `Products.tsx:8` `formatPrice` returns `$${(priceInCents / 100).toFixed(2)}` — which does NOT add thousands separators. `toLocaleString` adds them (`$1,234,567.89`). This is a deliberate small improvement (consistent-pass ambition allows it). If any existing vitest test asserts a thousands-separated value without commas, it would break — but the suite uses small cent values (e.g. 1299), so `toLocaleString` and `toFixed(2)` produce identical output for those. Confirm the suite still passes in Task 14.
+> ⚠ **Behavior note for the executor:** this is a deliberate change from the old `Products.tsx:8` `formatPrice`, which returned `$${(priceInCents / 100).toFixed(2)}` (dollar prefix, no thousands separators). The user decided the canonical currency is **CNY (¥)**, so `formatPrice` now returns `¥...` with thousands separators. Pages that rendered `¥{(x/100).toFixed(2)}` inline (Products, ProductDetailPage) get routed through `formatPrice` now — `¥12.99` either way, so no visible change there; pages that used the old `$`-returning `formatPrice` (Checkout, Orders, Admin) now render `¥` instead of `$` — **this is the intended CNY change.** Confirm the suite still passes in each page's task; if a test asserts a `$` string, update the test to `¥` (the test was asserting the old wrong-currency behavior).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -685,14 +685,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 - [ ] **Step 1: Rewrite the component**
 
-Apply: delete the local `formatPrice` (lines 7-10) — it now lives in `@/lib/format`. Search bar: `<input class="border p-2 rounded">` → `<Input>`; raw `<select>` (×2) → `<Select>`; search button → `<Button size="sm" icon={<Search className="h-4 w-4" />}>搜索</Button>`. Product cards → `<Card className="p-3 hover:shadow transition-shadow">` with image `aspect-square`/`object-cover`. Inline `¥{(p.priceInCents/100).toFixed(2)}` → `formatPrice(p.priceInCents)` (keep the `¥`? — the page shows `¥` not `$`; **decision: keep `¥` prefix here, so use `¥${formatPrice(...).slice(1)}` OR add the `¥` to the JSX** — see Step 2 note). Loading `加载中...` → keep text but wrap with `<Spinner />` above it (preserve `加载中` substring for tests: actually the test file `Products.test.tsx` must be checked — see Step 2). Empty `暂无数据` → `<EmptyState title="暂无数据" />`.
+Apply: delete the local `formatPrice` (lines 7-10) — it now lives in `@/lib/format` and returns `¥...` (CNY). Search bar: `<input class="border p-2 rounded">` → `<Input>`; raw `<select>` (×2) → `<Select>`; search button → `<Button size="sm" icon={<Search className="h-4 w-4" />}>搜索</Button>`. Product cards → `<Card className="p-3 hover:shadow transition-shadow">` with image `aspect-square`/`object-cover`. Inline `¥{(p.priceInCents / 100).toFixed(2)}` (line 81) → `formatPrice(p.priceInCents)` (now returns `¥12.99`, same visible output). Loading `加载中...` → keep text but wrap with `<Spinner />` above it (preserve `加载中` substring for tests — see Step 2). Empty `暂无数据` → `<EmptyState title="暂无数据" />`.
 
 - [ ] **Step 2: Check what `tests/Products.test.tsx` asserts, then preserve it**
 
 Run: `cd frame-frontend && cat tests/Products.test.tsx`
-Read the assertions. Preserve every queried string/role. **The `¥` vs `$` question:** the existing `formatPrice` returned `$...` but `Products.tsx:81` rendered `¥{...}` (literal `¥` + the `$`-prefixed string would be `¥$12.99` — a latent bug). **Decision:** render `¥{(p.priceInCents / 100).toFixed(2)}` is what's there; to keep it clean, add a `formatPriceCny` or just inline the `¥` + a numeric format. Simplest: keep using `¥` + `toFixed(2)` inline for CNY display in Products/ProductDetailPage/Coins, and use `formatPrice` (the `$` version) only in Checkout/Orders/Admin which already used `formatPrice`. **Verify the actual current render** (`Products.tsx:81` shows `¥{(p.priceInCents / 100).toFixed(2)}` — no `formatPrice` call there). So: leave the `¥` inline as-is; do NOT route Products' price through `formatPrice`. Only move the `formatPrice` *definition* out of Products.tsx.
-
-Revised Step 1 amendment: **Move the `formatPrice` function definition** from `Products.tsx:7-10` to `@/lib/format` (already done in Task 1). In `Products.tsx`, DELETE the local definition. Products.tsx itself does not call `formatPrice` (it inlines `¥`), so no import needed here. Pages that imported `formatPrice from './Products'` (Checkout, Orders, Admin) get repointed in their own tasks.
+Read the assertions. Preserve every queried string/role. The price renders as `¥` both before and after (old inline `¥`, new `formatPrice` returns `¥`), so no currency-driven test change is expected here. If a test does assert a price string, confirm it matches `¥` (CNY) — update only if it wrongly asserted `$` (it shouldn't have, since Products always showed `¥`).
 
 - [ ] **Step 3: Run the page's existing test**
 
@@ -724,7 +722,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Consumes: `Button`, `Input`, `Field`, `Card`, `StatusBadge`, `PageHeader`, `Spinner`, `formatPrice` (from `@/lib/format`).
 
 - [ ] **Step 1: Rewrite presentation**
-  - `import { formatPrice } from './Products'` (line 8) → `import { formatPrice } from '@/lib/format'`.
+  - `import { formatPrice } from './Products'` (line 8) → `import { formatPrice } from '@/lib/format'`. **Note:** `formatPrice` now returns CNY `¥…` (was `$…`), so Checkout's prices display `¥` — this is the intended CNY change. If `Checkout.test.tsx` asserts a `$` price string, update it to `¥`.
   - Delete `STATUS_COLORS` map (lines 11-21); delete the local `StatusBadge` function (lines 472-476) — use the shared `<StatusBadge status={order.status} />`. Note: Checkout's `PAID` was `green`; the canonical map makes `PAID=blue`. The test `Checkout.test.tsx` asserts behavior, not color — verify in Step 3.
   - `<input class="w-full px-3 py-2 rounded-md border border-slate-300...">` → `<Input>`; the local `Field` component (lines 440-470) → use shared `Field`+`Input`.
   - Card shells → `<Card className="p-4">`.
@@ -756,7 +754,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Modify: `frame-frontend/src/pages/Orders.tsx`
 
 - [ ] **Step 1: Rewrite presentation**
-  - `import { formatPrice } from './Products'` (line 16) → `from '@/lib/format'`.
+  - `import { formatPrice } from './Products'` (line 16) → `from '@/lib/format'`. **Note:** `formatPrice` now returns CNY `¥…` (was `$…`); if `Orders.test.tsx` asserts a `$` price, update to `¥`.
   - Delete `STATUS_COLORS` (18-28); the inline `<span>` status badge (273-278) and the special `退款处理中` case (268-272) → `<StatusBadge status={o.status} label="退款处理中" />` when `REFUND_PENDING` (the canonical color is already orange for REFUND_PENDING, matching). Preserve label `退款处理中`.
   - Tab buttons + table headers unchanged in copy. Action buttons (`详情`, `付款`, `取消`, `退款`, `确认收货`, `申请退款`, `Start shopping`) → keep as text-link buttons (`<Button variant="ghost" size="sm">`) but preserve exact labels.
   - Refund modal: local `<textarea class="border...">` → `<Textarea>`; modal buttons → `<Button>`.
@@ -785,7 +783,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Modify: `frame-frontend/src/pages/ProductDetailPage.tsx`
 
 - [ ] **Step 1: Rewrite presentation**
-  - Inline `¥{(detail.priceInCents / 100).toFixed(2)}` → keep `¥` prefix (CNY), leave inline `toFixed(2)` (consistent with Products). `text-gray-*` → `text-slate-*`.
+  - Inline `¥{(detail.priceInCents / 100).toFixed(2)}` → `formatPrice(detail.priceInCents)` (CNY `¥`, same visible output). Add `import { formatPrice } from '@/lib/format'`. `text-gray-*` → `text-slate-*`.
   - Button `加入购物车` (line 81) → `<Button>` (keep label).
   - Loading `加载中...` (line 57) → preserve string; optional `<Spinner>`. Empty `商品不存在` (56) → `<EmptyState title="商品不存在" />` (preserve string).
   - `库存` stock line → small `<Badge>`. Flash countdown text → keep logic, restyle container.
@@ -840,7 +838,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Modify: `frame-frontend/src/pages/Admin.tsx`
 
 - [ ] **Step 1: Rewrite presentation**
-  - `import { formatPrice } from './Products'` (line 21) → `from '@/lib/format'`.
+  - `import { formatPrice } from './Products'` (line 21) → `from '@/lib/format'`. **Note:** `formatPrice` now returns CNY `¥…` (was `$…`). Admin has no dedicated test, but if any later test asserts a `$` price, update to `¥`.
   - Delete `ORDER_STATUS_COLORS` (25-35); the `<span class="...ORDER_STATUS_COLORS...">` (700-704) → `<StatusBadge status={o.status} />`.
   - Product form inputs (lines 416-446) → `<Input>`; textarea (448-454) → `<Textarea>`; status-filter `<select>` (655-667) → `<Select>`.
   - All action buttons (`Create`, `Update`, `Cancel edit`, `Ship`, `Deliver`, `Approve`, `Deny`, `Open`, `Selected`, `Refresh`) → `<Button variant=... size="sm">` preserving labels. The `Yes`/`No` flash badges → `<Badge color="amber">Yes</Badge>` / `<Badge>No</Badge>`.
@@ -1678,6 +1676,6 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - §6 testing (build + vitest + mvn + e2e + curl) → built into each task's verification. ✅
 - §8 out-of-scope (no theme, no DB schema, no pre-existing disturbance) → enforced. ✅
 
-**2. Placeholder scan:** No TBD/TODO/"add appropriate". One genuine uncertainty flagged in-task: the `¥` vs `$` rendering in Products/ProductDetailPage — resolved in Task 6 Step 2 (keep `¥` inline, only move the *definition* of `formatPrice`). Backend `ResultCode.INTERNAL_ERROR` exact name → flagged "read ResultCode.java" in Task 20. e2e runner command → flagged "check e2e/" in Tasks 20–24. These are executor-verification steps, not missing plan content.
+**2. Placeholder scan:** No TBD/TODO/"add appropriate". The `¥` vs `$` rendering is now resolved decisively: user chose **CNY (¥)** as the canonical currency, so `formatPrice` returns `¥…` everywhere; Products/ProductDetailPage route their inline `¥{toFixed(2)}` through `formatPrice` (same visible output), and Checkout/Orders/Admin switch from `$` to `¥` (intended). Backend `ResultCode.INTERNAL_ERROR` exact name → flagged "read ResultCode.java" in Task 20. e2e runner command → flagged "check e2e/" in Tasks 20–24. These are executor-verification steps, not missing plan content.
 
 **3. Type consistency:** `cn(...classes: Array<string|false|null|undefined>)` matches usage in Button/Card/etc. `StatusBadgeProps.status: OrderStatus` matches the `@/api/types` export. `Money.subtotalCents(Map<Long,Product>, Map<Long,Integer>)` matches the audit's described call sites. `PageResults.of(IPage<T>)` returns `PageResult<T>` matching `common.PageResult`. Kit method names (`requireOwnedOrder`, `requireUserMatching`, `RedisKeys.orderStatus`) used consistently across the task that defines them and the task that consumes them.
