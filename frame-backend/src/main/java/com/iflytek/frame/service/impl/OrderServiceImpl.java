@@ -69,10 +69,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Long realPk = resolveOrderId(id);
-        Order o = orderMapper.selectById(realPk);
-        if (o == null || !o.getUserId().equals(userId)) {
-            throw new BusinessException(ResultCode.NOT_FOUND, "order not found");
-        }
+        Order o = requireOwnedOrder(realPk, userId);
         return o;
     }
 
@@ -91,10 +88,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public void cancel(Long id, Long userId) {
         Long realPk = resolveOrderId(id);
-        Order o = orderMapper.selectById(realPk);
-        if (o == null || !o.getUserId().equals(userId)) {
-            throw new BusinessException(ResultCode.NOT_FOUND, "order not found");
-        }
+        Order o = requireOwnedOrder(realPk, userId);
         // atomic: only PENDING can be cancelled
         int rows = orderMapper.updateStatusIf(realPk, OrderStatus.PENDING, OrderStatus.CANCELLED);
         if (rows == 0) {
@@ -118,10 +112,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public void cancelPaid(Long id, Long userId) {
         Long realPk = resolveOrderId(id);
-        Order o = orderMapper.selectById(realPk);
-        if (o == null || !o.getUserId().equals(userId)) {
-            throw new BusinessException(ResultCode.NOT_FOUND, "order not found");
-        }
+        Order o = requireOwnedOrder(realPk, userId);
         int rows = orderMapper.updateStatusAndRefund(realPk, OrderStatus.PAID, OrderStatus.CANCELLED,
                 RefundStatus.APPROVED, null);
         if (rows == 0) {
@@ -139,10 +130,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public void requestRefund(Long id, Long userId, String reason) {
         Long realPk = resolveOrderId(id);
-        Order o = orderMapper.selectById(realPk);
-        if (o == null || !o.getUserId().equals(userId)) {
-            throw new BusinessException(ResultCode.NOT_FOUND, "order not found");
-        }
+        Order o = requireOwnedOrder(realPk, userId);
         // No stock recredit here — the item is in transit; recredit happens on admin approval.
         int rows = orderMapper.updateStatusAndRefund(realPk, OrderStatus.SHIPPED, OrderStatus.REFUND_PENDING,
                 RefundStatus.PENDING, reason);
@@ -155,10 +143,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public void confirmReceipt(Long id, Long userId) {
         Long realPk = resolveOrderId(id);
-        Order o = orderMapper.selectById(realPk);
-        if (o == null || !o.getUserId().equals(userId)) {
-            throw new BusinessException(ResultCode.NOT_FOUND, "order not found");
-        }
+        Order o = requireOwnedOrder(realPk, userId);
         // Atomic CAS flip SHIPPED→DELIVERED with delivered_at in one update (no race window).
         int rows = orderMapper.updateStatusAndDelivered(realPk, OrderStatus.SHIPPED, OrderStatus.DELIVERED,
                 LocalDateTime.now());
@@ -184,10 +169,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public List<OrderItem> listItems(Long id, Long userId) {
         Long realPk = resolveOrderId(id);
-        Order o = orderMapper.selectById(realPk);
-        if (o == null || !o.getUserId().equals(userId)) {
-            throw new BusinessException(ResultCode.NOT_FOUND, "order not found");
-        }
+        Order o = requireOwnedOrder(realPk, userId);
         return orderItemMapper.selectList(
                 new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, realPk));
     }
@@ -233,6 +215,15 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public List<Order> listUnreviewedOrders(Long userId) {
         return orderMapper.selectUnreviewedOrders(userId);
+    }
+
+    @Override
+    public Order requireOwnedOrder(Long orderId, Long userId) {
+        Order o = orderMapper.selectById(orderId);
+        if (o == null || !o.getUserId().equals(userId)) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "order not found");
+        }
+        return o;
     }
 
     /**

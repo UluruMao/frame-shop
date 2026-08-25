@@ -89,6 +89,15 @@ public class UserServiceImpl implements UserService, UserDetailsService {
     }
 
     @Override
+    public User requireUserMatching(String username, Long userId) {
+        User u = findByUsername(username);
+        if (u == null || !u.getId().equals(userId)) {
+            throw new BusinessException(ResultCode.USER_NOT_FOUND, "user not found");
+        }
+        return u;
+    }
+
+    @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = findByUsername(username);
         if (user == null) {

@@ -24,11 +24,7 @@ public class PasswordServiceImpl implements PasswordService {
 
     @Override
     public void changePassword(Long userId, String oldPassword, String newPassword) {
-        User user = userService.findByUsername(SecurityUtils.currentUsername());
-        if (user == null || !user.getId().equals(userId)) {
-            // fallback: find by id path not in UserService; use the username route consistently
-            throw new BusinessException(ResultCode.USER_NOT_FOUND, "user not found");
-        }
+        User user = userService.requireUserMatching(SecurityUtils.currentUsername(), userId);
         if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
             throw new BusinessException(ResultCode.BAD_CREDENTIALS, "old password incorrect");
         }

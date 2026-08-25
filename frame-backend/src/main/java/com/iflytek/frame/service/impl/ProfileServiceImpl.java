@@ -28,10 +28,7 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     public void updateProfile(Long userId, String currentUsername, UpdateProfileRequest req) {
-        User u = userService.findByUsername(currentUsername);
-        if (u == null || !u.getId().equals(userId)) {
-            throw new BusinessException(ResultCode.USER_NOT_FOUND, "user not found");
-        }
+        User u = userService.requireUserMatching(currentUsername, userId);
         if (req.getNickname() != null && UserServiceImpl.containsBannedWordStatic(req.getNickname())) {
             throw new BusinessException(ResultCode.PARAM_INVALID, "nickname contains a banned word");
         }

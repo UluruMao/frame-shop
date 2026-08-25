@@ -26,7 +26,7 @@ class ProfileServiceImplTest {
         User u = new User();
         u.setId(1L);
         u.setUsername("bob");
-        when(userService.findByUsername("bob")).thenReturn(u);
+        when(userService.requireUserMatching("bob", 1L)).thenReturn(u);
 
         UpdateProfileRequest req = new UpdateProfileRequest();
         req.setNickname("admin");  // banned per banned-words.txt
@@ -42,7 +42,7 @@ class ProfileServiceImplTest {
         User u = new User();
         u.setId(1L);
         u.setUsername("bob");
-        when(userService.findByUsername("bob")).thenReturn(u);
+        when(userService.requireUserMatching("bob", 1L)).thenReturn(u);
 
         UpdateProfileRequest req = new UpdateProfileRequest();
         req.setNickname("Bobby");

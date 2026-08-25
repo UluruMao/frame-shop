@@ -37,10 +37,7 @@ public class PhoneRebindServiceImpl implements PhoneRebindService {
     @Override
     public void verifyOld(Long userId, String currentUsername, boolean oldPhoneUsable,
                            String code, String password) {
-        User u = userService.findByUsername(currentUsername);
-        if (u == null || !u.getId().equals(userId)) {
-            throw new BusinessException(ResultCode.USER_NOT_FOUND, "user not found");
-        }
+        User u = userService.requireUserMatching(currentUsername, userId);
         if (oldPhoneUsable) {
             if (u.getPhone() == null || code == null
                     || !codeService.verifyAndConsume(u.getPhone(), code, SmsPurpose.REBIND_OLD)) {
@@ -56,10 +53,7 @@ public class PhoneRebindServiceImpl implements PhoneRebindService {
 
     @Override
     public void confirm(Long userId, String currentUsername, String newPhone, String code) {
-        User u = userService.findByUsername(currentUsername);
-        if (u == null || !u.getId().equals(userId)) {
-            throw new BusinessException(ResultCode.USER_NOT_FOUND, "user not found");
-        }
+        User u = userService.requireUserMatching(currentUsername, userId);
         if (!"1".equals(redis.opsForValue().get(RedisKeys.rebindVerified(userId)))) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "old phone not verified");
         }

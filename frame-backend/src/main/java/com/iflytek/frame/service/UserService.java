@@ -29,4 +29,9 @@ public interface UserService {
 
     /** Update avatar URL (UC016 avatar upload). */
     void updateAvatar(Long userId, String avatarUrl);
+
+    /** Re-fetch the user by username and assert id matches, else USER_NOT_FOUND.
+     *  Replaces the 4× inline {@code u == null || !u.getId().equals(userId)} dance
+     *  in PhoneRebind/Profile/Password services. */
+    User requireUserMatching(String username, Long userId);
 }

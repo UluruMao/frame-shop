@@ -37,7 +37,7 @@ class PhoneRebindServiceImplTest {
     @Test
     void verifyOld_oldPhoneUsable_wrongCode_throws() {
         User u = new User(); u.setId(1L); u.setPhone("13800000000");
-        when(userService.findByUsername("bob")).thenReturn(u);
+        when(userService.requireUserMatching("bob", 1L)).thenReturn(u);
         when(codeService.verifyAndConsume("13800000000", "bad", SmsPurpose.REBIND_OLD)).thenReturn(false);
         assertThatThrownBy(() -> service.verifyOld(1L, "bob", true, "bad", null))
                 .isInstanceOf(BusinessException.class);
@@ -46,7 +46,7 @@ class PhoneRebindServiceImplTest {
     @Test
     void verifyOld_oldPhoneNotUsable_wrongPassword_throws() {
         User u = new User(); u.setId(1L); u.setPasswordHash("hash");
-        when(userService.findByUsername("bob")).thenReturn(u);
+        when(userService.requireUserMatching("bob", 1L)).thenReturn(u);
         when(encoder.matches("wrong", "hash")).thenReturn(false);
         assertThatThrownBy(() -> service.verifyOld(1L, "bob", false, null, "wrong"))
                 .isInstanceOf(BusinessException.class);
@@ -55,7 +55,7 @@ class PhoneRebindServiceImplTest {
     @Test
     void confirm_validCode_updatesPhone() {
         User u = new User(); u.setId(1L); u.setUsername("bob");
-        when(userService.findByUsername("bob")).thenReturn(u);
+        when(userService.requireUserMatching("bob", 1L)).thenReturn(u);
         when(valueOps.get("rebind:verified:1")).thenReturn("1");
         when(codeService.verifyAndConsume("13900000000", "123456", SmsPurpose.REBIND_NEW)).thenReturn(true);
         service.confirm(1L, "bob", "13900000000", "123456");

@@ -35,7 +35,7 @@ class PasswordServiceImplTest {
         com.iflytek.frame.entity.User u = new com.iflytek.frame.entity.User();
         u.setId(1L);
         u.setPasswordHash("hash");
-        when(userService.findByUsername(anyString())).thenReturn(u);
+        when(userService.requireUserMatching(anyString(), eq(1L))).thenReturn(u);
         when(encoder.matches("wrong", "hash")).thenReturn(false);
 
         assertThatThrownBy(() -> service.changePassword(1L, "wrong", "NewPass1!"))

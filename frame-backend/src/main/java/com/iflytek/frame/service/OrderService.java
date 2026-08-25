@@ -42,4 +42,9 @@ public interface OrderService {
 
     /** 未评价 tab: the user's {DELIVERED, COMPLETED} orders with ≥1 unreviewed line item. */
     List<Order> listUnreviewedOrders(Long userId);
+
+    /** Load an order (by DB PK) and assert it belongs to userId, else NOT_FOUND.
+     *  Replaces the 6× inline {@code o == null || !o.getUserId().equals(userId)} guard.
+     *  Callers must resolve a correlation id to the real PK first (see resolveOrderId). */
+    Order requireOwnedOrder(Long orderId, Long userId);
 }
