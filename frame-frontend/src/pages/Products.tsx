@@ -11,13 +11,6 @@ import EmptyState from '@/components/ui/EmptyState'
 import Spinner from '@/components/ui/Spinner'
 import { formatPrice } from '@/lib/format'
 
-/**
- * Re-exported so the not-yet-swept pages (Admin/Checkout/Orders, Tasks 7/9/11)
- * keep resolving while they still import from './Products'. Once those pages
- * import formatPrice from '@/lib/format' directly, this re-export can go.
- */
-export { formatPrice }
-
 export default function Products() {
   const [items, setItems] = useState<ProductListItem[]>([])
   const [total, setTotal] = useState(0)
