@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Shield, Zap, Pencil, Trash2, Plus, Loader2, Package, CheckCheck, RefreshCw, MessageCircle } from 'lucide-react'
+import { Shield, Zap, Pencil, Trash2, Plus, Package, CheckCheck, RefreshCw, MessageCircle } from 'lucide-react'
 import {
   pageProducts,
   createProduct,
@@ -18,21 +18,13 @@ import {
 import { adminInbox, adminHistory, type ChatSessionVO, type ChatMessageVO } from '@/api/chat'
 import { useChat } from '@/hooks/useChat'
 import type { Order, OrderStatus, Product } from '@/api/types'
-import { formatPrice } from './Products'
+import { formatPrice } from '@/lib/format'
 import { useIsAdmin } from '@/store/useAuthStore'
-
-/** Color for each order status badge (mirrors Orders.tsx). */
-const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
-  PENDING: 'bg-amber-100 text-amber-700',
-  PAID: 'bg-green-100 text-green-700',
-  CANCELLED: 'bg-slate-100 text-slate-600',
-  FAILED: 'bg-red-100 text-red-700',
-  SHIPPED: 'bg-indigo-100 text-indigo-700',
-  DELIVERED: 'bg-blue-100 text-blue-700',
-  COMPLETED: 'bg-slate-100 text-slate-600',
-  REFUND_PENDING: 'bg-orange-100 text-orange-700',
-  REFUNDED: 'bg-red-100 text-red-700',
-}
+import Button from '@/components/ui/Button'
+import Input, { Textarea } from '@/components/ui/Input'
+import Select from '@/components/ui/Select'
+import StatusBadge from '@/components/ui/StatusBadge'
+import Badge from '@/components/ui/Badge'
 
 /** Top-level Admin tabs: Products (CRUD), Orders (shipping/refund), and Chat (inbox). */
 type AdminTab = 'products' | 'orders' | 'chat'
@@ -413,41 +405,36 @@ export default function Admin() {
           {editingId !== null ? `Edit product #${editingId}` : 'New product'}
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input
+          <Input
             placeholder="Name"
-            className="px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
           />
-          <input
+          <Input
             placeholder="Price (cents)"
             type="number"
             min={0}
-            className="px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={form.priceInCents}
             onChange={(e) => setForm({ ...form, priceInCents: e.target.value })}
             required
           />
-          <input
+          <Input
             placeholder="Stock"
             type="number"
             min={0}
-            className="px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={form.stock}
             onChange={(e) => setForm({ ...form, stock: e.target.value })}
             required
           />
-          <input
+          <Input
             placeholder="Category (optional)"
-            className="px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
           />
         </div>
-        <textarea
+        <Textarea
           placeholder="Description (optional)"
-          className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           value={form.description}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
           rows={2}
@@ -465,31 +452,29 @@ export default function Admin() {
             <span className="text-xs text-slate-500">
               Flash sale opens at (auto-opens via scheduled job; leave blank for manual open)
             </span>
-            <input
+            <Input
               type="datetime-local"
-              className="px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               value={form.flashSaleAt}
               onChange={(e) => setForm({ ...form, flashSaleAt: e.target.value })}
             />
           </label>
         )}
         <div className="flex gap-2">
-          <button
+          <Button
             type="submit"
-            disabled={saving}
-            className="px-4 py-2 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-60 flex items-center gap-1.5"
+            loading={saving}
+            icon={<Plus className="w-4 h-4" />}
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {editingId !== null ? 'Update' : 'Create'}
-          </button>
+          </Button>
           {editingId !== null && (
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={resetForm}
-              className="px-4 py-2 rounded-md bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200"
             >
               Cancel edit
-            </button>
+            </Button>
           )}
         </div>
       </form>
@@ -519,11 +504,9 @@ export default function Admin() {
                   <td className="px-4 py-2 text-right text-slate-700">{p.stock}</td>
                   <td className="px-4 py-2">
                     {p.isFlashSale ? (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-xs font-medium">
-                        Yes
-                      </span>
+                      <Badge color="amber">Yes</Badge>
                     ) : (
-                      <span className="text-xs text-slate-300">No</span>
+                      <Badge color="slate">No</Badge>
                     )}
                   </td>
                   <td className="px-4 py-2 text-xs text-slate-600">
@@ -538,32 +521,30 @@ export default function Admin() {
                   </td>
                   <td className="px-4 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleOpenSale(p.id)}
                         disabled={saleId === p.id}
+                        loading={saleId === p.id}
                         title="Open flash sale (load stock into Redis)"
-                        className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 disabled:opacity-50"
-                      >
-                        {saleId === p.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Zap className="w-4 h-4" />
-                        )}
-                      </button>
-                      <button
+                        icon={<Zap className="w-4 h-4" />}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => startEdit(p)}
                         title="Edit"
-                        className="p-1.5 rounded-md text-slate-600 hover:bg-slate-100"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
+                        icon={<Pencil className="w-4 h-4" />}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleDelete(p.id)}
                         title="Delete"
-                        className="p-1.5 rounded-md text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        icon={<Trash2 className="w-4 h-4" />}
+                        className="text-red-600 hover:bg-red-50"
+                      />
                     </div>
                   </td>
                 </tr>
@@ -590,12 +571,14 @@ export default function Admin() {
             <div className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-orange-600" />
               <h2 className="text-sm font-medium text-slate-700">Refund requests</h2>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => { void loadRefunds(); void loadOrders() }}
-                className="ml-auto text-xs text-slate-500 hover:text-slate-800"
+                className="ml-auto"
               >
                 Refresh
-              </button>
+              </Button>
             </div>
             {refundsError && <p className="text-sm text-red-600">{refundsError}</p>}
             {refundsLoading ? (
@@ -622,20 +605,24 @@ export default function Admin() {
                           {o.refundReason || '—'}
                         </td>
                         <td className="px-4 py-2 text-right space-x-2">
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleApproveRefund(o.id)}
                             disabled={busyOrderId === o.id}
-                            className="text-xs text-green-600 hover:underline disabled:opacity-50"
+                            className="text-green-600"
                           >
                             {busyOrderId === o.id ? '…' : 'Approve'}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleDenyRefund(o.id)}
                             disabled={busyOrderId === o.id}
-                            className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                            className="text-red-600"
                           >
                             {busyOrderId === o.id ? '…' : 'Deny'}
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -652,19 +639,19 @@ export default function Admin() {
               <h2 className="text-sm font-medium text-slate-700">All orders</h2>
               <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500">
                 Status
-                <select
+                <Select
                   value={statusFilter ?? ''}
                   onChange={(e) =>
                     setStatusFilter((e.target.value || undefined) as OrderStatus | undefined)
                   }
-                  className="px-2 py-1 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-auto py-1"
                 >
                   {ORDER_STATUS_FILTERS.map((f) => (
                     <option key={f.label} value={f.value ?? ''}>
                       {f.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             </div>
             {ordersError && <p className="text-sm text-red-600">{ordersError}</p>}
@@ -697,11 +684,7 @@ export default function Admin() {
                           {formatPrice(o.totalInCents)}
                         </td>
                         <td className="px-4 py-2">
-                          <span
-                            className={`px-2 py-0.5 rounded text-xs font-medium ${ORDER_STATUS_COLORS[o.status]}`}
-                          >
-                            {o.status}
-                          </span>
+                          <StatusBadge status={o.status} />
                         </td>
                         <td className="px-4 py-2 text-slate-600 font-mono text-xs">
                           {o.trackingNumber || '—'}
@@ -709,41 +692,37 @@ export default function Admin() {
                         <td className="px-4 py-2 text-right">
                           {o.status === 'PAID' && (
                             <div className="flex items-center justify-end gap-1.5">
-                              <input
+                              <Input
                                 placeholder="Tracking #"
                                 value={trackingInputs[o.id] ?? ''}
                                 onChange={(e) =>
                                   setTrackingInputs((prev) => ({ ...prev, [o.id]: e.target.value }))
                                 }
-                                className="w-28 px-2 py-1 rounded border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                className="w-28 text-xs py-1"
                               />
-                              <button
+                              <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={() => handleShip(o.id)}
                                 disabled={busyOrderId === o.id}
-                                className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
+                                loading={busyOrderId === o.id}
+                                icon={<Package className="w-3 h-3" />}
                               >
-                                {busyOrderId === o.id ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <Package className="w-3 h-3" />
-                                )}
                                 Ship
-                              </button>
+                              </Button>
                             </div>
                           )}
                           {o.status === 'SHIPPED' && (
-                            <button
+                            <Button
+                              variant="primary"
+                              size="sm"
                               onClick={() => handleDeliver(o.id)}
                               disabled={busyOrderId === o.id}
-                              className="px-2.5 py-1 rounded-md bg-green-600 text-white text-xs font-medium hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                              loading={busyOrderId === o.id}
+                              icon={<CheckCheck className="w-3 h-3" />}
                             >
-                              {busyOrderId === o.id ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <CheckCheck className="w-3 h-3" />
-                              )}
                               Deliver
-                            </button>
+                            </Button>
                           )}
                           {o.status !== 'PAID' && o.status !== 'SHIPPED' && (
                             <span className="text-xs text-slate-300">—</span>
@@ -773,12 +752,14 @@ export default function Admin() {
             <div className="flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-brand-600" />
               <h2 className="text-sm font-medium text-slate-700">Open sessions</h2>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => { void loadInbox() }}
-                className="ml-auto text-xs text-slate-500 hover:text-slate-800"
+                className="ml-auto"
               >
                 Refresh
-              </button>
+              </Button>
             </div>
             {inboxError && <p className="text-sm text-red-600">{inboxError}</p>}
             {inboxLoading ? (
@@ -803,9 +784,7 @@ export default function Admin() {
                         <td className="px-4 py-2 text-slate-500">#{s.id}</td>
                         <td className="px-4 py-2 text-slate-800">user #{s.userId}</td>
                         <td className="px-4 py-2">
-                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                            {s.status}
-                          </span>
+                          <Badge color="green">{s.status}</Badge>
                         </td>
                         <td className="px-4 py-2 text-xs text-slate-600">
                           {s.createTime
@@ -818,12 +797,13 @@ export default function Admin() {
                             : '—'}
                         </td>
                         <td className="px-4 py-2 text-right">
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setSelectedSessionId(s.id)}
-                            className="text-xs text-brand-600 hover:underline"
                           >
                             {selectedSessionId === s.id ? 'Selected' : 'Open'}
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -896,19 +876,17 @@ function ChatReplyPanel({ sessionId }: { sessionId: number }) {
         )}
       </div>
       <form onSubmit={submit} className="flex gap-2">
-        <input
+        <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           placeholder="回复消息…"
         />
-        <button
+        <Button
           type="submit"
           disabled={!connected}
-          className="rounded-md bg-brand-600 px-4 py-2 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
         >
           发送
-        </button>
+        </Button>
       </form>
     </section>
   )
