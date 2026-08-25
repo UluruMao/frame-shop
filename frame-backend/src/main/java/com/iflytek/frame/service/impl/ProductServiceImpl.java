@@ -3,6 +3,7 @@ package com.iflytek.frame.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iflytek.frame.common.PageResult;
+import com.iflytek.frame.common.PageResults;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.ProductDTO;
 import com.iflytek.frame.dto.ProductDetail;
@@ -77,30 +78,10 @@ public class ProductServiceImpl implements ProductService {
         if (sf == null || !(sf.equals("price") || sf.equals("sales") || sf.equals("rating"))) {
             query.setSortField(null);
         }
-        // Normalize sortOrder → " ASC"/" DESC" (default desc). sortOrderSql is the ONLY ${} in the SQL,
-        // and it's derived from this whitelist — never raw user input (防SQL注入).
-        String so = query.getSortOrder();
-        String sql;
-        if (so != null && so.trim().equalsIgnoreCase("asc")) {
-            sql = " ASC";
-        } else if (so != null && so.trim().equalsIgnoreCase("desc")) {
-            sql = " DESC";
-        } else {
-            sql = " DESC";   // default
-        }
-        query.setSortOrderSql(sql);
-        // Split keyword on comma/space, trim, drop empties.
-        String kw = query.getKeyword();
-        if (kw == null || kw.isBlank()) {
-            query.setKeywords(null);
-        } else {
-            java.util.List<String> terms = new java.util.ArrayList<>();
-            for (String t : kw.split("[,\\s]+")) {
-                String tr = t.trim();
-                if (!tr.isEmpty()) terms.add(tr);
-            }
-            query.setKeywords(terms.isEmpty() ? null : terms);
-        }
+        // Derive the SQL-layer values via PageQuery (single source of truth). sortOrderSql is the
+        // ONLY ${} in the SQL, and it's derived from this whitelist — never raw user input (防SQL注入).
+        query.setSortOrderSql(query.sortOrderSql());
+        query.setKeywords(query.keywords());
         // ---- list cache (read-through) ----
         // Key built from the NORMALIZED query so logically-identical queries share a key.
         String cacheKey = listCacheKey(query);
@@ -122,7 +103,7 @@ public class ProductServiceImpl implements ProductService {
         }
         Page<ProductListItem> page = new Page<>(query.getCurrent(), query.getSize());
         IPage<ProductListItem> result = mapper.pageProducts(page, query);
-        PageResult<ProductListItem> pr = PageResult.of(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+        PageResult<ProductListItem> pr = PageResults.of(result);
         try {
             redis.opsForValue().set(cacheKey, objectMapper.writeValueAsString(pr), CACHE_TTL_SECONDS, TimeUnit.SECONDS);
             redis.opsForSet().add("products:page:keys", cacheKey);

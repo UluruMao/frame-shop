@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iflytek.frame.common.OrderStatus;
 import com.iflytek.frame.common.PageResult;
+import com.iflytek.frame.common.PageResults;
 import com.iflytek.frame.common.RefundStatus;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.entity.Order;
@@ -85,7 +86,7 @@ public class OrderServiceImpl implements OrderService {
                 .eq(status != null, Order::getStatus, status)
                 .orderByDesc(Order::getCreateTime);
         var result = orderMapper.selectPage(page, w);
-        return PageResult.of(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+        return PageResults.of(result);
     }
 
     @Override
