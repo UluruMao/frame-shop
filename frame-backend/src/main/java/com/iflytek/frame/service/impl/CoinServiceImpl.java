@@ -3,6 +3,7 @@ package com.iflytek.frame.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iflytek.frame.common.CoinSource;
+import com.iflytek.frame.common.IdempotentInsert;
 import com.iflytek.frame.common.Money;
 import com.iflytek.frame.common.PageResult;
 import com.iflytek.frame.common.ResultCode;
@@ -19,7 +20,6 @@ import com.iflytek.frame.service.CoinService;
 import com.iflytek.frame.util.PageQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,12 +56,18 @@ public class CoinServiceImpl implements CoinService {
         row.setSource(CoinSource.DAILY_LOGIN);
         row.setLoginDate(today);
         row.setExpiresAt(LocalDateTime.now().plusDays(EXPIRY_DAYS));
-        try {
-            coinMapper.insert(row);
-        } catch (DataIntegrityViolationException e) {
-            // two concurrent logins same instant — the other won; this is a no-op
-            log.debug("awardDailyLogin({}) duplicate-key no-op: {}", userId, e.getMessage());
-        }
+        IdempotentInsert.insertOr(
+                () -> {
+                    coinMapper.insert(row);
+                    return null;
+                },
+                () -> {
+                    // two concurrent logins same instant — the other won; this is a no-op.
+                    // (The original catch logged e.getMessage(); the DB-vendor message isn't
+                    // available inside the onDuplicate supplier, so we log a fixed label.)
+                    log.debug("awardDailyLogin({}) duplicate-key no-op", userId);
+                    return null;
+                });
     }
 
     @Override
@@ -85,12 +91,18 @@ public class CoinServiceImpl implements CoinService {
         row.setRefOrderId(orderId);
         row.setIdemKey("review:" + orderId);
         row.setExpiresAt(LocalDateTime.now().plusDays(EXPIRY_DAYS));
-        try {
-            coinMapper.insert(row);
-        } catch (DataIntegrityViolationException e) {
-            // concurrent double-fire (the Phase D flag) — idempotent no-op
-            log.debug("awardReviewReward({}) duplicate-key no-op: {}", orderId, e.getMessage());
-        }
+        IdempotentInsert.insertOr(
+                () -> {
+                    coinMapper.insert(row);
+                    return null;
+                },
+                () -> {
+                    // concurrent double-fire (the Phase D flag) — idempotent no-op.
+                    // (Original catch logged e.getMessage(); the DB-vendor message isn't
+                    // available inside the onDuplicate supplier, so we log a fixed label.)
+                    log.debug("awardReviewReward({}) duplicate-key no-op", orderId);
+                    return null;
+                });
     }
 
     @Override
@@ -217,11 +229,17 @@ public class CoinServiceImpl implements CoinService {
             refund.setRefCreditId(spend.getRefCreditId());
             refund.setIdemKey("refund:" + orderId + ":" + spend.getId());
             refund.setExpiresAt(restoredExpiry); // restore original clock, not a fresh 30 days
-            try {
-                coinMapper.insert(refund);
-            } catch (DataIntegrityViolationException e) {
-                log.debug("refundCoins({}) duplicate-key no-op on spend row {}: {}", orderId, spend.getId(), e.getMessage());
-            }
+            IdempotentInsert.insertOr(
+                    () -> {
+                        coinMapper.insert(refund);
+                        return null;
+                    },
+                    () -> {
+                        // (Original catch logged e.getMessage(); the DB-vendor message isn't
+                        // available inside the onDuplicate supplier, so we log a fixed label.)
+                        log.debug("refundCoins({}) duplicate-key no-op on spend row {}", orderId, spend.getId());
+                        return null;
+                    });
         }
     }
 

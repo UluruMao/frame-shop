@@ -37,6 +37,10 @@ public class ChatServiceImpl implements ChatService {
             session = new ChatSession();
             session.setUserId(userId);
             session.setStatus("OPEN");
+            // Left inline (not IdempotentInsert.insertOr): the catch re-selects and, if that still
+            // returns null, rethrows the ORIGINAL DataIntegrityViolationException. insertOr's
+            // onDuplicate Supplier can't access the caught exception, so it can't faithfully
+            // rethrow the DB-vendor exception object on the (shouldn't-happen) null path.
             try {
                 sessionMapper.insert(session);
             } catch (DataIntegrityViolationException e) {

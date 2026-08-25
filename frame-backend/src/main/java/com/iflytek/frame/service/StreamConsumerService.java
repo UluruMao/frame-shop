@@ -272,6 +272,11 @@ public class StreamConsumerService {
             int paidInCents = totalInCents - coinDiscountCents;
             order.setPaidInCents(paidInCents);
 
+            // Left inline (not IdempotentInsert.insertOr): the catch has branching control flow
+            // (re-select; on hit → set 2 redis keys + return; on miss → recredit loop +
+            // invalidateListCache + rethrow the ORIGINAL exception). insertOr's single
+            // onDuplicate Supplier can't express the return-vs-rethrow split, and can't rethrow
+            // the original DB-vendor exception object (it has no access to the caught exception).
             try {
                 orderMapper.insert(order);
             } catch (DataIntegrityViolationException dup) {
