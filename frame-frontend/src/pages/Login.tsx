@@ -3,6 +3,9 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { LogIn } from 'lucide-react'
 import { login } from '@/api/auth'
 import { useAuthStore } from '@/store/useAuthStore'
+import Button from '@/components/ui/Button'
+import Field from '@/components/ui/Field'
+import Input from '@/components/ui/Input'
 
 export default function Login() {
   const [username, setUsername] = useState('admin')
@@ -42,32 +45,24 @@ export default function Login() {
           <h1 className="text-lg font-semibold text-slate-800">Sign in</h1>
         </div>
 
-        <div className="space-y-1.5">
-          <label className="block text-sm text-slate-600" htmlFor="username">
-            Username or phone
-          </label>
-          <input
+        <Field label="Username or phone" id="username">
+          <Input
             id="username"
-            className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
           />
-        </div>
+        </Field>
 
-        <div className="space-y-1.5">
-          <label className="block text-sm text-slate-600" htmlFor="password">
-            Password
-          </label>
-          <input
+        <Field label="Password" id="password">
+          <Input
             id="password"
             type="password"
-            className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
           />
-        </div>
+        </Field>
 
         {error && (
           <div className="space-y-1">
@@ -83,13 +78,9 @@ export default function Login() {
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-60"
-        >
+        <Button type="submit" loading={loading} className="w-full">
           {loading ? 'Signing in…' : 'Sign in'}
-        </button>
+        </Button>
 
         <p className="text-xs text-slate-400 text-center">
           Demo credentials: admin / admin123

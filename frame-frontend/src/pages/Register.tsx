@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { UserPlus } from 'lucide-react'
 import { register, sendCode } from '@/api/auth'
 import CaptchaImage from '@/components/CaptchaImage'
+import Button from '@/components/ui/Button'
+import Input from '@/components/ui/Input'
 
 export default function Register() {
   const [username, setUsername] = useState('')
@@ -46,24 +48,24 @@ export default function Register() {
           <UserPlus className="w-5 h-5 text-brand-600" />
           <h1 className="text-lg font-semibold text-slate-800">Create account</h1>
         </div>
-        <input className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" placeholder="Username (4-25, alphanumeric)" value={username} onChange={(e) => setUsername(e.target.value)} required minLength={4} maxLength={25} />
-        <input type="password" className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" placeholder="Password (≥8, 2 of upper/lower/special)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
-        <input className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" placeholder="Phone (11 digits)" value={phone} onChange={(e) => setPhone(e.target.value)} required pattern="\d{11}" />
+        <Input placeholder="Username (4-25, alphanumeric)" value={username} onChange={(e) => setUsername(e.target.value)} required minLength={4} maxLength={25} />
+        <Input type="password" placeholder="Password (≥8, 2 of upper/lower/special)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+        <Input placeholder="Phone (11 digits)" value={phone} onChange={(e) => setPhone(e.target.value)} required pattern="\d{11}" />
         <CaptchaImage onChange={(id, ans) => { setCaptchaId(id); setCaptchaAnswer(ans) }} />
         <div className="flex gap-2">
-          <input className="flex-1 px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" placeholder="Verification code" value={code} onChange={(e) => setCode(e.target.value)} required />
-          <button type="button" disabled={cooldown > 0} onClick={() => void handleSendCode()} className="px-3 py-2 rounded-md bg-brand-50 text-brand-700 text-sm font-medium hover:bg-brand-100 disabled:opacity-60">
+          <Input className="flex-1" placeholder="Verification code" value={code} onChange={(e) => setCode(e.target.value)} required />
+          <Button type="button" variant="secondary" size="sm" disabled={cooldown > 0} onClick={() => void handleSendCode()}>
             {cooldown > 0 ? `${cooldown}s` : 'Get code'}
-          </button>
+          </Button>
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
           I have read and agree to the Terms & Privacy Policy
         </label>
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="submit" disabled={loading} className="w-full py-2 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-60">
+        <Button type="submit" loading={loading} className="w-full">
           {loading ? 'Creating…' : 'Register'}
-        </button>
+        </Button>
         <p className="text-xs text-slate-500 text-center">
           Already have an account? <Link to="/login" className="text-brand-600 hover:underline">Sign in</Link>
         </p>
