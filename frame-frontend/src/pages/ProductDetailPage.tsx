@@ -4,6 +4,11 @@ import { getProductDetail, getProduct } from '@/api/product'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useCart } from '@/store/CartContext'
 import type { ProductDetail } from '@/api/types'
+import { formatPrice } from '@/lib/format'
+import Button from '@/components/ui/Button'
+import Badge from '@/components/ui/Badge'
+import EmptyState from '@/components/ui/EmptyState'
+import Spinner from '@/components/ui/Spinner'
 
 function fmtCountdown(ms: number): string {
   if (ms <= 0) return '00:00:00'
@@ -53,8 +58,8 @@ export default function ProductDetailPage() {
     return () => { stop = true; clearInterval(t) }
   }, [detail])
 
-  if (notFound) return <div className="p-8 text-center text-gray-500">商品不存在</div>
-  if (!detail) return <div className="p-8">加载中...</div>
+  if (notFound) return <div className="p-8"><EmptyState title="商品不存在" /></div>
+  if (!detail) return <div className="p-8 flex items-center gap-2"><Spinner /> 加载中...</div>
 
   const flashStart = detail.flashSaleAt ? new Date(detail.flashSaleAt).getTime() : 0
   const isFlashLive = detail.isFlashSale && flashStart > 0 && flashStart <= Date.now()
@@ -74,20 +79,20 @@ export default function ProductDetailPage() {
         {detail.imageUrl && <img src={detail.imageUrl} alt={detail.name} loading="lazy" className="h-64 w-full rounded object-cover" />}
         <div>
           <h1 className="text-2xl font-bold">{detail.name}</h1>
-          <div className="my-2 text-xl text-brand-600">¥{(detail.priceInCents / 100).toFixed(2)}</div>
-          <div className="text-sm text-gray-500">分类: {detail.category ?? '—'} · 已售 {detail.sold} · 评分 {detail.avgRating.toFixed(1)}</div>
-          <div className="my-2">库存: {stockShown}</div>
+          <div className="my-2 text-xl text-brand-600">{formatPrice(detail.priceInCents)}</div>
+          <div className="text-sm text-slate-500">分类: {detail.category ?? '—'} · 已售 {detail.sold} · 评分 {detail.avgRating.toFixed(1)}</div>
+          <div className="my-2 flex items-center gap-2"><span className="text-sm text-slate-500">库存:</span> <Badge>{stockShown}</Badge></div>
           {isFlashUpcoming && <div className="text-brand-600">秒杀即将开始 倒计时 {hh}:{mm}:{ss}</div>}
-          <button onClick={onAddToCart} className="mt-3 rounded bg-brand-600 px-4 py-2 text-white">加入购物车</button>
+          <Button onClick={onAddToCart} className="mt-3">加入购物车</Button>
         </div>
       </div>
       <div className="mt-6">
         <h2 className="mb-2 text-lg font-semibold">商品详情</h2>
-        <p className="text-gray-700">{detail.description ?? '暂无描述'}</p>
+        <p className="text-slate-700">{detail.description ?? '暂无描述'}</p>
       </div>
       <div className="mt-6">
         <h2 className="mb-2 text-lg font-semibold">评价</h2>
-        <p className="text-gray-500">暂无评价</p>
+        <p className="text-slate-500">暂无评价</p>
       </div>
     </div>
   )
