@@ -1,6 +1,7 @@
 package com.iflytek.frame.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.entity.Order;
 import com.iflytek.frame.entity.OrderItem;
 import com.iflytek.frame.mapper.OrderItemMapper;
@@ -50,7 +51,7 @@ public class OrderStockReleaseService {
             }
             productMapper.recreditStock(it.getProductId(), it.getQuantity());        // DB (always)
             try {
-                redis.delete("seckill:" + it.getProductId() + ":" + o.getUserId());  // release one-per-user lock
+                redis.delete(RedisKeys.seckill(it.getProductId(), o.getUserId()));  // release one-per-user lock
             } catch (RedisConnectionFailureException e) {
                 log.warn("Redis seckill-delete failed for product {} — non-fatal: {}",
                         it.getProductId(), e.getMessage());

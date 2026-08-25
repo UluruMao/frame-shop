@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iflytek.frame.common.OrderStatus;
 import com.iflytek.frame.common.PageResult;
 import com.iflytek.frame.common.PageResults;
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.common.RefundStatus;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.entity.Order;
@@ -28,9 +29,6 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class OrderServiceImpl implements OrderService {
-
-    /** Redis key prefix mapping a checkout correlation id (millis) → the Order's DB PK. */
-    private static final String ORDER_ID_MAP_PREFIX = "order_id_map:";
 
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
@@ -60,7 +58,7 @@ public class OrderServiceImpl implements OrderService {
         // set order_status:{id} = "queued" in Redis. The consumer hasn't persisted the
         // Order row yet, so neither selectById(id) nor order_id_map:{id} will resolve.
         // Return a synthetic Order so the frontend can poll for "pending"/"failed".
-        String statusKey = "order_status:" + id;
+        String statusKey = RedisKeys.orderStatus(id);
         String cachedStatus = redis.opsForValue().get(statusKey);
         if ("queued".equals(cachedStatus)) {
             Order queued = new Order();
@@ -255,7 +253,7 @@ public class OrderServiceImpl implements OrderService {
             return correlationOrPk;
         }
         // Slow path: the id is the millis correlation id → look up the real PK in Redis.
-        String mapped = redis.opsForValue().get(ORDER_ID_MAP_PREFIX + correlationOrPk);
+        String mapped = redis.opsForValue().get(RedisKeys.orderIdMap(String.valueOf(correlationOrPk)));
         if (mapped != null) {
             try {
                 Long realPk = Long.valueOf(mapped);

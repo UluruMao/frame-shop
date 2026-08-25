@@ -1,5 +1,6 @@
 package com.iflytek.frame.service.impl;
 
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.service.LoginAttemptService;
 import com.iflytek.frame.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +58,6 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
     }
 
     private String key(Long userId) {
-        return "login:fail:" + userId;
+        return RedisKeys.loginFail(userId);
     }
 }

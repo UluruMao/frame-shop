@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iflytek.frame.common.PageResult;
 import com.iflytek.frame.common.PageResults;
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.ProductDTO;
 import com.iflytek.frame.dto.ProductDetail;
@@ -49,7 +50,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @SneakyThrows
     public Product getById(Long id) {
-        String key = "product:" + id;
+        String key = RedisKeys.product(id);
         String cached = null;
         try {
             cached = redis.opsForValue().get(key);
@@ -106,7 +107,7 @@ public class ProductServiceImpl implements ProductService {
         PageResult<ProductListItem> pr = PageResults.of(result);
         try {
             redis.opsForValue().set(cacheKey, objectMapper.writeValueAsString(pr), CACHE_TTL_SECONDS, TimeUnit.SECONDS);
-            redis.opsForSet().add("products:page:keys", cacheKey);
+            redis.opsForSet().add(RedisKeys.productsPage("keys"), cacheKey);
         } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
             log.warn("Redis list-cache write failed for key {}: {}", cacheKey, e.getMessage());
         }
@@ -118,18 +119,18 @@ public class ProductServiceImpl implements ProductService {
         String normalized = query.getCurrent() + "|" + query.getSize()
                 + "|" + query.getSortField() + "|" + query.getSortOrderSql()
                 + "|" + query.getCategory() + "|" + query.getKeywords();
-        return "products:page:" + Integer.toHexString(normalized.hashCode());
+        return RedisKeys.productsPage(Integer.toHexString(normalized.hashCode()));
     }
 
     /** Invalidate the entire product list cache (on any product mutation). */
     @Override
     public void invalidateListCache() {
         try {
-            var keys = redis.opsForSet().members("products:page:keys");
+            var keys = redis.opsForSet().members(RedisKeys.productsPage("keys"));
             if (keys != null && !keys.isEmpty()) {
                 redis.delete(java.util.List.copyOf(keys));
             }
-            redis.delete("products:page:keys");
+            redis.delete(RedisKeys.productsPage("keys"));
         } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
             log.warn("Redis list-cache invalidation failed (non-fatal): {}", e.getMessage());
         }
@@ -169,9 +170,9 @@ public class ProductServiceImpl implements ProductService {
         existing.setFlashSaleAt(dto.getFlashSaleAt());
         existing.setDescription(dto.getDescription());
         mapper.updateById(existing);
-        redis.delete("product:" + id);
+        redis.delete(RedisKeys.product(id));
         // Gap 4: resync the Lua-gate stock:{id} key if it exists (active sale)
-        if (Boolean.TRUE.equals(redis.hasKey("stock:" + id))) {
+        if (Boolean.TRUE.equals(redis.hasKey(RedisKeys.stock(id)))) {
             stockGateService.loadStock(id);
         }
         invalidateListCache();
@@ -182,7 +183,7 @@ public class ProductServiceImpl implements ProductService {
     public void delete(Long id) {
         getById(id);
         mapper.deleteById(id);
-        redis.delete("product:" + id);
+        redis.delete(RedisKeys.product(id));
         invalidateListCache();
     }
 
@@ -202,7 +203,7 @@ public class ProductServiceImpl implements ProductService {
         file.transferTo(dir.resolve(filename).toFile());
         String imageUrl = "/uploads/" + filename;
         mapper.updateImageUrl(id, imageUrl);
-        redis.delete("product:" + id);
+        redis.delete(RedisKeys.product(id));
         invalidateListCache();
         return imageUrl;
     }

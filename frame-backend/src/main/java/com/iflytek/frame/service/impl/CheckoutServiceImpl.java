@@ -2,6 +2,7 @@ package com.iflytek.frame.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iflytek.frame.common.Money;
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.CheckoutRequest;
 import com.iflytek.frame.dto.CheckoutResponse;
@@ -123,7 +124,7 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         // 2b. One-per-user check (spec §6 step 3): reject users who already purchased.
         for (Long pid : qtyByProduct.keySet()) {
-            if (Boolean.TRUE.equals(redis.hasKey("seckill:" + pid + ":" + userId))) {
+            if (Boolean.TRUE.equals(redis.hasKey(RedisKeys.seckill(pid, userId)))) {
                 throw new BusinessException(ResultCode.CONFLICT, "already purchased this item");
             }
         }
@@ -154,8 +155,8 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 5. LPUSH to orders:pending + set order_status = queued, return 202.
         Long orderId = ORDER_SEQ.incrementAndGet();
         String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct, useCoins, validatedCoinAmount);
-        redis.opsForList().leftPush("orders:pending", payload);
-        redis.opsForValue().set("order_status:" + orderId, "queued");
+        redis.opsForList().leftPush(RedisKeys.ordersPending(), payload);
+        redis.opsForValue().set(RedisKeys.orderStatus(orderId), "queued");
         return new CheckoutResponse(orderId, "queued");
     }
 

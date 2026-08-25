@@ -1,6 +1,7 @@
 package com.iflytek.frame.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.exception.BusinessException;
@@ -44,7 +45,7 @@ public class StockGateServiceImpl implements StockGateService {
 
     @Override
     public String tryClaimStock(List<Long> productIds, List<Integer> quantities) {
-        List<String> keys = productIds.stream().map(id -> "stock:" + id).collect(Collectors.toList());
+        List<String> keys = productIds.stream().map(id -> RedisKeys.stock(id)).collect(Collectors.toList());
         String[] args = quantities.stream().map(String::valueOf).toArray(String[]::new);
         // Pass the String[] WITHOUT a cast so the compiler unwraps it into the
         // Object... varargs — each element becomes an ARGV[i] the Lua script reads
@@ -63,7 +64,7 @@ public class StockGateServiceImpl implements StockGateService {
         if (p == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "product not found: " + productId);
         }
-        redis.opsForValue().set("stock:" + productId, String.valueOf(p.getStock()));
+        redis.opsForValue().set(RedisKeys.stock(productId), String.valueOf(p.getStock()));
     }
 
     @Override
@@ -73,7 +74,7 @@ public class StockGateServiceImpl implements StockGateService {
 
     @Override
     public void recredit(Long productId, int qty) {
-        redis.opsForValue().increment("stock:" + productId, qty);
+        redis.opsForValue().increment(RedisKeys.stock(productId), qty);
     }
 
     /**
@@ -111,7 +112,7 @@ public class StockGateServiceImpl implements StockGateService {
             return;
         }
         for (Product p : due) {
-            String key = "stock:" + p.getId();
+            String key = RedisKeys.stock(p.getId());
             try {
                 if (Boolean.FALSE.equals(redis.hasKey(key))) {
                     log.info("Auto-opening flash sale for product {} (flashSaleAt={})", p.getId(), p.getFlashSaleAt());

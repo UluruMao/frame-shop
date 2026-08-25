@@ -1,6 +1,7 @@
 package com.iflytek.frame.service.impl;
 
 import com.iflytek.frame.common.ResultCode;
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.entity.User;
 import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.service.PhoneRebindService;
@@ -50,7 +51,7 @@ public class PhoneRebindServiceImpl implements PhoneRebindService {
                 throw new BusinessException(ResultCode.BAD_CREDENTIALS, "password incorrect");
             }
         }
-        redis.opsForValue().set("rebind:verified:" + userId, "1", Duration.ofMinutes(10));
+        redis.opsForValue().set(RedisKeys.rebindVerified(userId), "1", Duration.ofMinutes(10));
     }
 
     @Override
@@ -59,13 +60,13 @@ public class PhoneRebindServiceImpl implements PhoneRebindService {
         if (u == null || !u.getId().equals(userId)) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND, "user not found");
         }
-        if (!"1".equals(redis.opsForValue().get("rebind:verified:" + userId))) {
+        if (!"1".equals(redis.opsForValue().get(RedisKeys.rebindVerified(userId)))) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "old phone not verified");
         }
         if (!codeService.verifyAndConsume(newPhone, code, SmsPurpose.REBIND_NEW)) {
             throw new BusinessException(ResultCode.PARAM_INVALID, "new-phone code invalid");
         }
         userService.updatePhone(userId, newPhone);
-        redis.delete("rebind:verified:" + userId);
+        redis.delete(RedisKeys.rebindVerified(userId));
     }
 }

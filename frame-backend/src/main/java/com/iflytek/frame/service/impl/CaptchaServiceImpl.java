@@ -1,5 +1,6 @@
 package com.iflytek.frame.service.impl;
 
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.dto.CaptchaResponse;
 import com.iflytek.frame.service.CaptchaService;
 import lombok.RequiredArgsConstructor;
@@ -27,14 +28,14 @@ public class CaptchaServiceImpl implements CaptchaService {
         int b = ThreadLocalRandom.current().nextInt(1, 10);
         String answer = String.valueOf(a + b);
         String id = UUID.randomUUID().toString();
-        redis.opsForValue().set("captcha:" + id, answer, Duration.ofSeconds(120));
+        redis.opsForValue().set(RedisKeys.captcha(id), answer, Duration.ofSeconds(120));
         String svg = buildSvg(a + " + " + b + " = ?");
         return new CaptchaResponse(id, svg);
     }
 
     @Override
     public boolean verify(String captchaId, String answer) {
-        String key = captchaId.startsWith("captcha:") ? captchaId : "captcha:" + captchaId;
+        String key = captchaId.startsWith("captcha:") ? captchaId : RedisKeys.captcha(captchaId);
         String stored = redis.opsForValue().get(key);
         if (stored == null || !stored.equals(answer == null ? "" : answer.trim())) {
             return false;

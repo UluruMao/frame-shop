@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iflytek.frame.common.OrderStatus;
 import com.iflytek.frame.common.PaymentMethod;
 import com.iflytek.frame.common.Money;
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.entity.Order;
 import com.iflytek.frame.entity.OrderItem;
 import com.iflytek.frame.entity.Product;
@@ -83,7 +84,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class StreamConsumerService {
 
-    private static final String STREAM = "orders:pending";
+    private static final String STREAM = RedisKeys.ordersPending();
     private static final String GROUP = "order-consumers";
     private static final String CONSUMER = "c1";
 
@@ -175,7 +176,7 @@ public class StreamConsumerService {
             // acceptable; a production system would use BRPOPLPUSH to a processing list.
             List<String> payloads = new ArrayList<>();
             for (int i = 0; i < 100; i++) {
-                String payload = redis.opsForList().rightPop("orders:pending");
+                String payload = redis.opsForList().rightPop(RedisKeys.ordersPending());
                 if (payload == null) break;
                 payloads.add(payload);
             }
@@ -276,9 +277,9 @@ public class StreamConsumerService {
             } catch (DataIntegrityViolationException dup) {
                 Order existing = orderMapper.selectByIdempotencyKey(idempotencyKey);
                 if (existing != null) {
-                    redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                    redis.opsForValue().set(RedisKeys.orderIdMap(String.valueOf(payloadOrderId)),
                             String.valueOf(existing.getId()));
-                    redis.opsForValue().set("order_status:" + payloadOrderId, "pending");
+                    redis.opsForValue().set(RedisKeys.orderStatus(payloadOrderId), "pending");
                     return;
                 }
                 for (JsonNode item : itemsNode) {
@@ -297,11 +298,11 @@ public class StreamConsumerService {
                 if (rows == 0) {
                     order.setStatus(OrderStatus.FAILED);
                     orderMapper.updateById(order);
-                    redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                    redis.opsForValue().set(RedisKeys.orderIdMap(String.valueOf(payloadOrderId)),
                             String.valueOf(order.getId()));
                     stockGateService.recredit(pid, qty);
-                    redis.delete("seckill:" + pid + ":" + userId);
-                    redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
+                    redis.delete(RedisKeys.seckill(pid, userId));
+                    redis.opsForValue().set(RedisKeys.orderStatus(payloadOrderId), "failed");
                     invalidateListCacheSafe();
                     return;
                 }
@@ -313,7 +314,7 @@ public class StreamConsumerService {
                 oi.setPriceInCents(p.getPriceInCents());
                 oi.setQuantity(qty);
                 orderItemMapper.insert(oi);
-                redis.opsForValue().set("seckill:" + pid + ":" + userId, "1",
+                redis.opsForValue().set(RedisKeys.seckill(pid, userId), "1",
                         3600, TimeUnit.SECONDS);
             }
             // The per-item decrementStock loop above mutated product.stock in the DB; clear the
@@ -348,11 +349,11 @@ public class StreamConsumerService {
                         Long pid = item.get("productId").asLong();
                         int qty = item.get("quantity").asInt();
                         stockGateService.recredit(pid, qty);
-                        redis.delete("seckill:" + pid + ":" + userId);
+                        redis.delete(RedisKeys.seckill(pid, userId));
                     }
-                    redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                    redis.opsForValue().set(RedisKeys.orderIdMap(String.valueOf(payloadOrderId)),
                             String.valueOf(order.getId()));
-                    redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
+                    redis.opsForValue().set(RedisKeys.orderStatus(payloadOrderId), "failed");
                     invalidateListCacheSafe();
                     return;
                 }
@@ -369,20 +370,20 @@ public class StreamConsumerService {
                             Long pid = item.get("productId").asLong();
                             int qty = item.get("quantity").asInt();
                             stockGateService.recredit(pid, qty);
-                            redis.delete("seckill:" + pid + ":" + userId);
+                            redis.delete(RedisKeys.seckill(pid, userId));
                         }
-                        redis.opsForValue().set("order_id_map:" + payloadOrderId,
+                        redis.opsForValue().set(RedisKeys.orderIdMap(String.valueOf(payloadOrderId)),
                                 String.valueOf(order.getId()));
-                        redis.opsForValue().set("order_status:" + payloadOrderId, "failed");
+                        redis.opsForValue().set(RedisKeys.orderStatus(payloadOrderId), "failed");
                         invalidateListCacheSafe();
                         return;
                     }
                     throw coinFail;
                 }
             }
-            redis.opsForValue().set("order_id_map:" + payloadOrderId,
+            redis.opsForValue().set(RedisKeys.orderIdMap(String.valueOf(payloadOrderId)),
                     String.valueOf(order.getId()));
-            redis.opsForValue().set("order_status:" + payloadOrderId, "pending");
+            redis.opsForValue().set(RedisKeys.orderStatus(payloadOrderId), "pending");
         } catch (DataIntegrityViolationException rethrow) {
             throw rethrow;
         } catch (Exception e) {

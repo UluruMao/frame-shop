@@ -1,6 +1,7 @@
 package com.iflytek.frame.sms;
 
 import com.iflytek.frame.common.ResultCode;
+import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.config.SmsProperties;
 import com.iflytek.frame.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +36,7 @@ public class LoggingVerificationProvider implements VerificationCodeProvider {
 
     @Override
     public void send(String phone, SmsPurpose purpose) {
-        String cooldownKey = "sms:cooldown:" + purpose + ":" + phone;
+        String cooldownKey = RedisKeys.smsCooldown(purpose.toString(), phone);
         if (Boolean.TRUE.equals(redis.hasKey(cooldownKey))) {
             throw new BusinessException(ResultCode.TOO_MANY_REQUESTS, "please wait before requesting another code");
         }
@@ -57,6 +58,6 @@ public class LoggingVerificationProvider implements VerificationCodeProvider {
     }
 
     private String codeKey(SmsPurpose purpose, String phone) {
-        return "sms:code:" + purpose + ":" + phone;
+        return RedisKeys.smsCode(purpose.toString(), phone);
     }
 }
