@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Coins as CoinsIcon } from 'lucide-react'
 import { getCoinBalance, getCoinHistory } from '@/api/coin'
 import type { CoinBalance, CoinHistoryRow, PageResult } from '@/api/types'
+import Card from '@/components/ui/Card'
+import PageHeader from '@/components/ui/PageHeader'
 
 const SOURCE_LABEL: Record<string, string> = {
   DAILY_LOGIN: '每日登录',
@@ -29,13 +31,10 @@ export default function Coins() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <CoinsIcon className="h-5 w-5 text-amber-500" />
-        <h1 className="text-xl font-semibold text-slate-800">我的金币</h1>
-      </div>
+      <PageHeader icon={<CoinsIcon className="h-5 w-5 text-amber-500" />} title="我的金币" />
 
       {balance && (
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
+        <Card className="p-4">
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold text-amber-600">{balance.balance}</span>
             <span className="text-sm text-slate-500">颗（100颗 = ¥1）</span>
@@ -43,10 +42,10 @@ export default function Coins() {
           <p className="mt-1 text-xs text-slate-500">
             {balance.claimedToday ? '今日已领取' : '今日可领取（登录后自动领取）'}
           </p>
-        </div>
+        </Card>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-lg p-4">
+      <Card className="p-4">
         <h2 className="mb-2 text-sm font-medium text-slate-700">金币明细</h2>
         {history.length === 0 ? (
           <p className="text-sm text-slate-500">暂无记录</p>
@@ -65,7 +64,7 @@ export default function Coins() {
             ))}
           </ul>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

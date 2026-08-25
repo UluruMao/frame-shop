@@ -3,6 +3,9 @@ import { X } from 'lucide-react'
 import StarRating from './StarRating'
 import { createReview, updateReview, uploadReviewImage } from '@/api/review'
 import type { Review } from '@/api/types'
+import Card from './ui/Card'
+import { Textarea } from './ui/Input'
+import Button from './ui/Button'
 
 interface ReviewModalProps {
   orderId: number
@@ -56,7 +59,7 @@ export default function ReviewModal({ orderId, productId, existing, onClose, onS
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-lg">
+      <Card className="w-full max-w-md p-5 shadow-lg">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold">{existing ? '编辑评价' : '写评价'}</h2>
           <button onClick={onClose}><X className="h-5 w-5 text-slate-400" /></button>
@@ -65,8 +68,7 @@ export default function ReviewModal({ orderId, productId, existing, onClose, onS
           <StarRating label="商品质量" value={quality} onChange={setQuality} />
           <StarRating label="物流速度" value={logistics} onChange={setLogistics} />
           <StarRating label="客服态度" value={service} onChange={setService} />
-          <textarea
-            className="w-full border rounded p-2 text-sm"
+          <Textarea
             rows={3}
             placeholder="图文评价（可选）"
             value={content}
@@ -100,16 +102,12 @@ export default function ReviewModal({ orderId, productId, existing, onClose, onS
         </div>
         {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
         <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded border px-3 py-1.5 text-sm">取消</button>
-          <button
-            onClick={submit}
-            disabled={busy}
-            className="rounded bg-brand-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-          >
+          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button onClick={submit} loading={busy}>
             {busy ? '提交中…' : '提交评价'}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

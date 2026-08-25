@@ -1,5 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { TrendingUp, Package, DollarSign, Activity } from 'lucide-react'
+import Card from '@/components/ui/Card'
 
 // Static demo data — replace with a real API call when business data exists.
 const salesData = [
@@ -29,10 +30,7 @@ export default function Dashboard() {
       {/* Stat tiles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon }) => (
-          <div
-            key={label}
-            className="bg-white border border-slate-200 rounded-lg p-4 flex items-center gap-3"
-          >
+          <Card key={label} className="p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-md bg-brand-50 flex items-center justify-center">
               <Icon className="w-5 h-5 text-brand-600" />
             </div>
@@ -40,12 +38,12 @@ export default function Dashboard() {
               <div className="text-lg font-semibold text-slate-800">{value}</div>
               <div className="text-xs text-slate-500">{label}</div>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Chart */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4">
+      <Card className="p-4">
         <h2 className="text-sm font-medium text-slate-700 mb-3">Monthly sales</h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -58,7 +56,7 @@ export default function Dashboard() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
