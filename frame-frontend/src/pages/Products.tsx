@@ -3,11 +3,20 @@ import { Link } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { pageProducts, listCategories } from '@/api/product'
 import type { ProductListItem, PageQuery } from '@/api/types'
+import Button from '@/components/ui/Button'
+import Input from '@/components/ui/Input'
+import Select from '@/components/ui/Select'
+import Card from '@/components/ui/Card'
+import EmptyState from '@/components/ui/EmptyState'
+import Spinner from '@/components/ui/Spinner'
+import { formatPrice } from '@/lib/format'
 
-/** Format integer cents as a dollar string: 1299 → "$12.99". */
-export function formatPrice(priceInCents: number): string {
-  return `$${(priceInCents / 100).toFixed(2)}`
-}
+/**
+ * Re-exported so the not-yet-swept pages (Admin/Checkout/Orders, Tasks 7/9/11)
+ * keep resolving while they still import from './Products'. Once those pages
+ * import formatPrice from '@/lib/format' directly, this re-export can go.
+ */
+export { formatPrice }
 
 export default function Products() {
   const [items, setItems] = useState<ProductListItem[]>([])
@@ -43,21 +52,21 @@ export default function Products() {
     <div className="mx-auto max-w-6xl p-4">
       <h1 className="mb-4 text-2xl font-bold">商品列表 ({total})</h1>
       <div className="mb-4 flex flex-wrap gap-2">
-        <input
-          className="border p-2 rounded"
+        <Input
+          className="w-auto"
           placeholder="搜索商品名称，多关键词用逗号或空格"
           value={keywordInput}
           onChange={(e) => setKeywordInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && onSearch()}
         />
-        <button className="rounded bg-brand-600 px-3 py-2 text-white" onClick={onSearch}>
-          <Search className="inline h-4 w-4" /> 搜索
-        </button>
-        <select aria-label="分类" className="border p-2 rounded" onChange={onCategory} value={query.category ?? ''}>
+        <Button size="sm" icon={<Search className="h-4 w-4" />} onClick={onSearch}>
+          搜索
+        </Button>
+        <Select aria-label="分类" className="w-auto" onChange={onCategory} value={query.category ?? ''}>
           <option value="">全部分类</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select aria-label="排序" className="border p-2 rounded" onChange={onSort}>
+        </Select>
+        <Select aria-label="排序" className="w-auto" onChange={onSort}>
           <option value="">默认</option>
           <option value="price|asc">价格升序</option>
           <option value="price|desc">价格降序</option>
@@ -65,21 +74,26 @@ export default function Products() {
           <option value="sales|asc">销量升序</option>
           <option value="rating|desc">评价降序</option>
           <option value="rating|asc">评价升序</option>
-        </select>
+        </Select>
       </div>
 
       {loading ? (
-        <p>加载中...</p>
+        <div className="flex flex-col items-center gap-2 py-10">
+          <Spinner />
+          <p>加载中...</p>
+        </div>
       ) : items.length === 0 ? (
-        <p className="text-gray-500">暂无数据</p>
+        <EmptyState title="暂无数据" />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((p) => (
-            <Link to={`/products/${p.id}`} key={p.id} className="block rounded border p-3 hover:shadow">
-              {p.imageUrl && <img src={p.imageUrl} alt={p.name} loading="lazy" className="mb-2 h-32 w-full object-cover" />}
-              <div className="font-medium">{p.name}</div>
-              <div className="text-brand-600">¥{(p.priceInCents / 100).toFixed(2)}</div>
-              <div className="text-sm text-gray-500">已售 {p.sold} · 评分 {p.avgRating.toFixed(1)}</div>
+            <Link to={`/products/${p.id}`} key={p.id}>
+              <Card className="p-3 transition-shadow hover:shadow">
+                {p.imageUrl && <img src={p.imageUrl} alt={p.name} loading="lazy" className="mb-2 h-32 w-full object-cover" />}
+                <div className="font-medium">{p.name}</div>
+                <div className="text-brand-600">{formatPrice(p.priceInCents)}</div>
+                <div className="text-sm text-slate-500">已售 {p.sold} · 评分 {p.avgRating.toFixed(1)}</div>
+              </Card>
             </Link>
           ))}
         </div>
