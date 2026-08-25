@@ -6,6 +6,7 @@
 **Constraint (user, clarified — two distinct boundaries):**
 - **Cloud server `172.29.231.145`:** "已有的东西不要动" applies *here* — must not disturb other existing data/services on the server that don't belong to this project. Recon read-only, pick non-conflicting ports/paths/DB names, own directories, own systemd unit. Everything pre-existing stays untouched.
 - **This project's source (frontend + backend in this repo):** freely editable — and **open to small API/behavior improvements, not just behavior-preserving refactors.** So the "flagged" backend items below (raw-exception fix, `@PreAuthorize` migration, pagination unification, validators) are in-scope to *do*, not merely log.
+**New requirement (user):** **Modularize so the backend can be combined with the user's own future backend modifications with minimal merge friction.** This raises a first-class principle — see §2 "Modular & mergeable."
 
 ---
 
@@ -41,6 +42,7 @@ The frontend has two coexisting style dialects and hand-copied patterns; the bac
 ## 2. Design principles
 
 - **Reuse is the mechanism that enforces unification.** A shared kit, applied everywhere, structurally prevents drift — not just by convention.
+- **Modular & mergeable.** The user may modify the backend themselves later and recombine it with this work. So: (a) new shared kits are self-contained units with clear boundaries and no entanglement with the code that uses them — lift one without dragging the rest; (b) the frontend depends only on the backend's *HTTP API contract* (`api/types.ts` + `api/*.ts`), never on backend internals — a backend change shouldn't ripple past the types layer; (c) prefer additive modules over editing deeply-coupled logic in place where feasible, so future merges land as small, localized diffs.
 - **Backend: open to small API/behavior improvements** on this project's source — not limited to behavior-preserving refactors. Larger/riskier changes (DB schema, security posture) are still flagged for the user.
 - **Cloud server is sacrosanct.** Deployment must not disturb other existing data/services on `172.29.231.145` that don't belong to this project — read-only recon, non-conflicting ports/paths/DB names, own directories + unit.
 - **No new visual identity.** Unify on the existing polished newer-dialect look (slate borders, brand accent, focus rings, hover states). No gradients, no theme overhaul.
@@ -87,11 +89,20 @@ Every page switches its hand-written controls to the kit. Per page:
 
 **Behavior frozen:** no page's logic, state, data flow, or API calls change — only presentation.
 
+### 3.4 Frontend ↔ backend seam (modularization enabler)
+
+The frontend already depends only on the backend's **HTTP contract**, never its internals — this is the seam that makes backend modularization possible:
+- `api/types.ts` — TS interfaces mirroring backend DTOs (`Order`, `Product`, `CheckoutRequest`, `PageQuery`, `OrderStatus`, …). Single source of the contract on the client.
+- `api/request.ts` — Axios instance that unwraps the `Result` envelope; per-domain `api/auth.ts`/`api/order.ts`/etc. call it.
+- Pages import types + api functions, **never** backend package names or DTO internals.
+
+**Design rule for this work:** keep the seam intact. New `ui/` components and `lib/format.ts` are pure presentation — they take primitives/TS types, no backend awareness. If a backend DTO field changes, the blast radius is `api/types.ts` + the one page that renders it — not the `ui/` kit. This is what lets the user swap in a modified backend later: as long as the HTTP contract (URL + JSON shape) holds, the frontend is unaffected.
+
 ---
 
-## 4. Backend design — behavior-preserving consolidation
+## 4. Backend design — modular, self-contained shared kits
 
-Extract the verified duplications into shared helpers. Each is a refactor: same inputs, same outputs, same API contract.
+Extract the verified duplications into shared helpers. Each new kit is a **self-contained module**: one package, one responsibility, no dependencies on the calling code — so the user can lift or merge it independently when they recombine their own backend changes. §4.1–4.5 are behavior-preserving; §4.6 are small API/behavior improvements.
 
 ### 4.1 `RedisKeys` constants class (`common/RedisKeys.java`)
 Centralizes the 11 key prefixes as `static String` builders, e.g. `orderStatus(long id)`, `orderIdMap(String id)`, `seckill(long pid, long userId)`, `stock(long id)`, `product(long id)`, `productsPage(...)`, etc. All ~45 concatenations switch to `RedisKeys.x(...)`. **Behavior-identical** (same resulting strings).
@@ -121,6 +132,15 @@ User opened the backend to small API/behavior improvements on this project's sou
 - **Pagination → `PageQuery` unification** for the 3 controllers (`AdminOperationLogController`, `AdminChatController`, `ChatController`) that currently use manual `@RequestParam page/size`. **Risk: API-breaking** (query param name changes, e.g. `page`→`current`). Mitigation: do this **together with** the matching frontend call sites (`Chat.tsx`, `Admin.tsx`, the operation-log table) in the same change so caller+callee stay in sync, and update the e2e suite's request URLs. If any external caller exists outside this repo, that would block — but the audit shows only the frontend calls these.
 - **`@Phone` / `@SmsCode` Bean Validation annotations + shared `PhoneCodeRequest` base.** Consolidates the 4 phone+code DTOs (`RegisterRequest`, `ForgotPasswordRequest`, `RebindConfirmRequest`, `SendCodeRequest`) and adds `@NotBlank` to the unvalidated `RebindVerifyOldRequest`. Also folds the duplicated `validPassword`/`validUsername` static checks into a `@ValidPassword` annotation. **Risk: low–medium** (validation is additive — strictens unvalidated fields; could turn a previously-accepted empty string into a 400, but the intent is clearly to require these).
 
+### 4.7 How the user combines their future backend changes
+
+Each shared kit is designed so the user can take their own modified backend and re-apply the kits with minimal merge friction:
+- **Kits live in `common/` / `util/` / `validation/` as standalone files** (`RedisKeys`, `Money`, `PageResults`, `IdempotentInsert`, the validators). They depend only on Spring/JDK/MyBatis-Plus stdlib — not on services or controllers. Drop them into a modified backend and they compile.
+- **Adoption is call-site edits, not API changes.** Switching a service from `"order_status:" + id` to `RedisKeys.orderStatus(id)` is a localized one-liner per call site — a future merge that touches the same service produces a small, reviewable conflict, not a rewrite.
+- **The HTTP contract is the only frontend coupling.** If the user's backend changes keep the same JSON shapes + URLs, the frontend needs zero changes. If a DTO shape changes, only `api/types.ts` + the rendering page change — the `ui/` kit is untouched.
+- **Commits are organized one-kit-per-commit** (kit added, then its call-site sweep), so the user can `git cherry-pick` / rebase individual kits onto their branch selectively.
+- **What to do when recombining:** (1) copy the kit files into the modified backend; (2) re-apply the call-site edits (most are mechanical find-replace, e.g. `"stock:" + id` → `RedisKeys.stock(id)`); (3) `mvn package` + run the e2e suite to confirm the contract holds. Kits that conflict with the user's own changes can be skipped individually without losing the rest.
+
 Items 4.1–4.5 are behavior-preserving extracts; 4.6 are the behavior/API improvements. Both proceed, with tests gating 4.6.
 
 ---
@@ -149,7 +169,7 @@ Deployment steps that would touch existing data/services (e.g. dropping a DB, ov
 
 1. Frontend: build `lib/format.ts` + the `ui/` kit (with small vitest tests for `formatPrice`/`cn`/`StatusBadge`).
 2. Frontend: sweep pages, page by page, building after each.
-3. Backend: extract 4.1–4.5 (behavior-preserving), `mvn package` + e2e after each.
+3. Backend: extract 4.1–4.5, **one kit per commit** (kit file added, then its call-site sweep in the same commit), `mvn package` + e2e after each.
 4. Backend: do the 4.6 API/behavior improvements, each gated by `mvn package` + e2e green. Log any that turn out riskier-than-scoped to `docs/superpowers/skipped-issues.md` and skip.
 5. Cloud deployment learning journey to `172.29.231.145`.
 
