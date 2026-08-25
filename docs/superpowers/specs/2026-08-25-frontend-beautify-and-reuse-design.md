@@ -3,7 +3,9 @@
 **Date:** 2026-08-25
 **Origin:** Mentor instruction: "页面美化，组件复用，风格统一" + learn cloud deployment to `172.29.231.145`.
 **Scope decision (user):** Frontend polish first, then deploy the improved app. Consistency-pass ambition (clean/minimal, unify on the polished newer-dialect look — no new visual identity).
-**Constraint (user, clarified):** "已有的东西不要动" means **don't disturb existing data/services running on the cloud server** (change ports on conflict) — it does **not** mean freeze the project source. We freely edit the frontend and refactor the backend.
+**Constraint (user, clarified — two distinct boundaries):**
+- **Cloud server `172.29.231.145`:** "已有的东西不要动" applies *here* — must not disturb other existing data/services on the server that don't belong to this project. Recon read-only, pick non-conflicting ports/paths/DB names, own directories, own systemd unit. Everything pre-existing stays untouched.
+- **This project's source (frontend + backend in this repo):** freely editable — and **open to small API/behavior improvements, not just behavior-preserving refactors.** So the "flagged" backend items below (raw-exception fix, `@PreAuthorize` migration, pagination unification, validators) are in-scope to *do*, not merely log.
 
 ---
 
@@ -39,7 +41,8 @@ The frontend has two coexisting style dialects and hand-copied patterns; the bac
 ## 2. Design principles
 
 - **Reuse is the mechanism that enforces unification.** A shared kit, applied everywhere, structurally prevents drift — not just by convention.
-- **Behavior-preserving.** Backend refactors extract → reuse, keeping the API contract byte-identical. The deployed cloud server is unaffected. Anything that *would* change behavior/API is flagged and skipped (logged for user review), per the autonomy directive.
+- **Backend: open to small API/behavior improvements** on this project's source — not limited to behavior-preserving refactors. Larger/riskier changes (DB schema, security posture) are still flagged for the user.
+- **Cloud server is sacrosanct.** Deployment must not disturb other existing data/services on `172.29.231.145` that don't belong to this project — read-only recon, non-conflicting ports/paths/DB names, own directories + unit.
 - **No new visual identity.** Unify on the existing polished newer-dialect look (slate borders, brand accent, focus rings, hover states). No gradients, no theme overhaul.
 - **Each unit small, one purpose.** Every new component/helper is independently understandable and testable.
 
@@ -110,14 +113,15 @@ Centralizes the 11 key prefixes as `static String` builders, e.g. `orderStatus(l
 ### 4.5 Idempotent-insert helper
 - A small `IdempotentInsert` utility (or `DataIntegrityRetry` helper) consolidating the 5× `try{insert}catch(DataIntegrityViolationException)` blocks. Recovery bodies differ, so the helper takes a `Runnable onDuplicate` callback. Behavior-identical.
 
-### 4.6 Explicitly FLAGGED for user review (not auto-done)
-These touch behavior/API surface or are risky — **log + skip, per autonomy directive**:
-- **Raw `RuntimeException` → `BusinessException` fix** (`CheckoutServiceImpl:192`, `StreamConsumerService:388`). Technically changes the error response shape (500-generic → `Result.fail(INTERNAL_ERROR,...)`). Low risk, arguably a bugfix, but it alters observable behavior → flagged.
-- **3 controllers' pagination → `PageQuery` unification** (`AdminOperationLogController`, `AdminChatController`, `ChatController`). Changing `@RequestParam page/size` → `@ParameterObject PageQuery` changes the query param names (`page`→`current`) → **API-breaking**. Flagged, not done.
-- **`@PreAuthorize` migration for admin endpoints** — changes security enforcement location; flagged.
-- **`@Phone`/`@SmsCode` validators + `PhoneCodeRequest` base** — touches DTOs/validation; flagged as a nice-to-have.
+### 4.6 Small API/behavior improvements (now in-scope, per user)
+User opened the backend to small API/behavior improvements on this project's source. These were previously "flagged-and-skip"; they are now **in-scope to do**, each with its risk noted so the user knows what changes. Backend tests + e2e (67/67) must still pass after each.
 
-The five primary extracts (4.1–4.5) are all behavior-preserving.
+- **Raw `RuntimeException` → `BusinessException` fix** (`CheckoutServiceImpl:192`, `StreamConsumerService:388`). Changes the error response on a Jackson-serialization failure from a generic 500 to `Result.fail(INTERNAL_ERROR, "image serialization failed")` — matching the pattern already used at `ReviewServiceImpl:165`. **Risk: low** (an already-error path becomes a structured error; no happy-path impact). The frontend Axios interceptor already surfaces `message` either way.
+- **`@PreAuthorize` migration for admin endpoints.** Replace the URL-string-based admin enforcement in `SecurityConfig.java:108-130` with method-level `@PreAuthorize("hasRole('ADMIN')")` co-located with each admin controller method. **Risk: medium** (security posture change). Guard: keep the URL matchers in `SecurityConfig` as a defense-in-depth second layer during migration; add a test asserting an unauthenticated/non-admin call to each `/admin/**` endpoint still 403s. Do not remove the URL matchers until the annotation-based checks are proven by a green test run.
+- **Pagination → `PageQuery` unification** for the 3 controllers (`AdminOperationLogController`, `AdminChatController`, `ChatController`) that currently use manual `@RequestParam page/size`. **Risk: API-breaking** (query param name changes, e.g. `page`→`current`). Mitigation: do this **together with** the matching frontend call sites (`Chat.tsx`, `Admin.tsx`, the operation-log table) in the same change so caller+callee stay in sync, and update the e2e suite's request URLs. If any external caller exists outside this repo, that would block — but the audit shows only the frontend calls these.
+- **`@Phone` / `@SmsCode` Bean Validation annotations + shared `PhoneCodeRequest` base.** Consolidates the 4 phone+code DTOs (`RegisterRequest`, `ForgotPasswordRequest`, `RebindConfirmRequest`, `SendCodeRequest`) and adds `@NotBlank` to the unvalidated `RebindVerifyOldRequest`. Also folds the duplicated `validPassword`/`validUsername` static checks into a `@ValidPassword` annotation. **Risk: low–medium** (validation is additive — strictens unvalidated fields; could turn a previously-accepted empty string into a 400, but the intent is clearly to require these).
+
+Items 4.1–4.5 are behavior-preserving extracts; 4.6 are the behavior/API improvements. Both proceed, with tests gating 4.6.
 
 ---
 
@@ -146,11 +150,12 @@ Deployment steps that would touch existing data/services (e.g. dropping a DB, ov
 1. Frontend: build `lib/format.ts` + the `ui/` kit (with small vitest tests for `formatPrice`/`cn`/`StatusBadge`).
 2. Frontend: sweep pages, page by page, building after each.
 3. Backend: extract 4.1–4.5 (behavior-preserving), `mvn package` + e2e after each.
-4. Log the flagged items (4.6) in `docs/superpowers/skipped-issues.md`.
+4. Backend: do the 4.6 API/behavior improvements, each gated by `mvn package` + e2e green. Log any that turn out riskier-than-scoped to `docs/superpowers/skipped-issues.md` and skip.
 5. Cloud deployment learning journey to `172.29.231.145`.
 
 ## 8. Out of scope
 
 - New visual identity / theme / gradients (user chose consistency-pass).
-- Backend behavior/API changes (raw-exception fix, pagination-param rename, @PreAuthorize migration) — flagged, not done.
+- Touching pre-existing data/services on `172.29.231.145` that don't belong to this project (own dirs/ports/DB name/unit only; recon read-only).
+- DB schema changes / data migrations (the backend work here is code+validation only; schema unchanged).
 - 99.95% availability / monitoring / OAuth2 / 10k-QPS proof (already NFR-deferred per project memory).
