@@ -12,20 +12,12 @@ import {
 } from '@/api/order'
 import { listUnreviewedOrders, listOrderReviews } from '@/api/review'
 import ReviewModal from '@/components/ReviewModal'
+import Button from '@/components/ui/Button'
+import PageHeader from '@/components/ui/PageHeader'
+import StatusBadge from '@/components/ui/StatusBadge'
+import { Textarea } from '@/components/ui/Input'
+import { formatPrice } from '@/lib/format'
 import type { Order, OrderItem, OrderStatus, Review } from '@/api/types'
-import { formatPrice } from './Products'
-
-const STATUS_COLORS: Record<OrderStatus, string> = {
-  PENDING: 'bg-amber-100 text-amber-700',
-  PAID: 'bg-blue-100 text-blue-700',
-  SHIPPED: 'bg-indigo-100 text-indigo-700',
-  DELIVERED: 'bg-green-100 text-green-700',
-  COMPLETED: 'bg-slate-100 text-slate-600',
-  REFUND_PENDING: 'bg-orange-100 text-orange-700',
-  REFUNDED: 'bg-red-100 text-red-700',
-  CANCELLED: 'bg-slate-100 text-slate-600',
-  FAILED: 'bg-red-100 text-red-700',
-}
 
 /** Tab label → status filter passed to getMyOrders. undefined = all statuses. */
 const TABS: { label: string; status?: OrderStatus; unreviewed?: boolean }[] = [
@@ -189,18 +181,14 @@ export default function Orders() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ClipboardList className="w-5 h-5 text-brand-600" />
-          <h1 className="text-xl font-semibold text-slate-800">My Orders</h1>
-          <span className="text-sm text-slate-400">({total})</span>
-        </div>
-        <button
-          onClick={load}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-slate-600 text-sm hover:bg-slate-100"
-        >
-          <RefreshCw className="w-4 h-4" />
+        <PageHeader
+          title="My Orders"
+          icon={<ClipboardList className="w-5 h-5 text-brand-600" />}
+          count={total}
+        />
+        <Button variant="ghost" size="sm" onClick={load} icon={<RefreshCw className="w-4 h-4" />}>
           Refresh
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -266,70 +254,66 @@ export default function Orders() {
                     </td>
                     <td className="px-4 py-2">
                       {o.status === 'REFUND_PENDING' ? (
-                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">
-                          退款处理中
-                        </span>
+                        <StatusBadge status={o.status} label="退款处理中" />
                       ) : (
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[o.status]}`}
-                        >
-                          {o.status}
-                        </span>
+                        <StatusBadge status={o.status} />
                       )}
                     </td>
                     <td className="px-4 py-2 text-slate-500">
                       {o.createTime ? new Date(o.createTime).toLocaleString() : '—'}
                     </td>
                     <td className="px-4 py-2 text-right space-x-2">
-                      <button
-                        onClick={() => toggleExpand(o.id)}
-                        className="text-xs text-slate-600 hover:underline"
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => toggleExpand(o.id)}>
                         详情
-                      </button>
+                      </Button>
                       {o.status === 'PENDING' && (
                         <>
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handlePay(o.id)}
                             disabled={busyId === o.id}
-                            className="text-xs text-blue-600 hover:underline disabled:opacity-50"
                           >
                             {busyId === o.id ? '处理中…' : '付款'}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleCancel(o.id)}
                             disabled={busyId === o.id}
-                            className="text-xs text-red-600 hover:underline disabled:opacity-50"
                           >
                             取消
-                          </button>
+                          </Button>
                         </>
                       )}
                       {o.status === 'PAID' && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleCancelPaid(o.id)}
                           disabled={busyId === o.id}
-                          className="text-xs text-red-600 hover:underline disabled:opacity-50"
                         >
                           {busyId === o.id ? '处理中…' : '退款'}
-                        </button>
+                        </Button>
                       )}
                       {o.status === 'SHIPPED' && (
                         <>
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleConfirmReceipt(o.id)}
                             disabled={busyId === o.id}
-                            className="text-xs text-green-600 hover:underline disabled:opacity-50"
                           >
                             {busyId === o.id ? '处理中…' : '确认收货'}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => openRefundModal(o.id)}
                             disabled={busyId === o.id}
-                            className="text-xs text-orange-600 hover:underline disabled:opacity-50"
                           >
                             申请退款
-                          </button>
+                          </Button>
                         </>
                       )}
                       {o.status !== 'PENDING' &&
@@ -403,12 +387,9 @@ export default function Orders() {
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
                     No orders yet.{' '}
-                    <button
-                      onClick={() => navigate('/products')}
-                      className="text-brand-600 hover:underline"
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/products')}>
                       Start shopping
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               )}
@@ -428,27 +409,22 @@ export default function Orders() {
               </button>
             </div>
             <p className="text-sm text-slate-500">订单 #{refundOrderId}</p>
-            <textarea
+            <Textarea
               value={refundReason}
               onChange={(e) => setRefundReason(e.target.value)}
               placeholder="请输入退款原因 / refund reason"
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               rows={3}
             />
             <div className="flex justify-end gap-2">
-              <button
-                onClick={closeRefundModal}
-                className="px-3 py-1.5 rounded-md text-sm text-slate-600 hover:bg-slate-100"
-              >
+              <Button variant="ghost" size="sm" onClick={closeRefundModal}>
                 取消
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={submitRefund}
                 disabled={busyId === refundOrderId}
-                className="px-3 py-1.5 rounded-md text-sm bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
               >
                 {busyId === refundOrderId ? '提交中…' : '提交'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
