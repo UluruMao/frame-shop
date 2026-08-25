@@ -3,6 +3,7 @@ package com.iflytek.frame.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iflytek.frame.common.CoinSource;
+import com.iflytek.frame.common.Money;
 import com.iflytek.frame.common.PageResult;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.CoinBalanceVO;
@@ -35,7 +36,6 @@ import java.util.Map;
 public class CoinServiceImpl implements CoinService {
 
     private static final ZoneId CST = ZoneId.of("Asia/Shanghai");
-    private static final int COINS_PER_YUAN = 100;
     private static final int EXPIRY_DAYS = 30;
 
     private final CoinMapper coinMapper;
@@ -71,7 +71,7 @@ public class CoinServiceImpl implements CoinService {
         if (o == null || !o.getUserId().equals(userId)) {
             return; // ownership/missing — silently no-op (caller's try/catch isolates)
         }
-        int rewardCoins = o.getPaidInCents() / COINS_PER_YUAN; // yuan, floor
+        int rewardCoins = o.getPaidInCents() / Money.COINS_PER_YUAN; // yuan, floor
         if (rewardCoins <= 0) {
             log.debug("awardReviewReward({}) no-op: paidInCents={} → 0 coins", orderId, o.getPaidInCents());
             return;
@@ -105,16 +105,13 @@ public class CoinServiceImpl implements CoinService {
             p.setReason("coins cannot be used on flash-sale items");
             return p;
         }
-        int subtotalCents = 0;
         Map<Long, Product> byId = new java.util.HashMap<>();
         for (Product pr : products) {
             byId.put(pr.getId(), pr);
         }
-        for (Map.Entry<Long, Integer> e : qtyByProduct.entrySet()) {
-            subtotalCents += byId.get(e.getKey()).getPriceInCents() * e.getValue();
-        }
+        int subtotalCents = Money.subtotalCents(byId, qtyByProduct);
         int maxDiscountCents = subtotalCents / 2; // 50% cap
-        int maxCoins = (maxDiscountCents / COINS_PER_YUAN) * COINS_PER_YUAN; // 100-coin granularity
+        int maxCoins = (maxDiscountCents / Money.COINS_PER_YUAN) * Money.COINS_PER_YUAN; // 100-coin granularity
         int balance = currentBalance(userId);
         // `usable` is what spendAtCheckout can actually deduct FIFO (sum of un-spent, un-expired
         // positive credits), NOT the balance SUM — the balance SUM counts refunded/nullified credits
@@ -122,7 +119,7 @@ public class CoinServiceImpl implements CoinService {
         // report more usable coins than a spend can consume, so the consumer's spendAtCheckout would
         // throw CONFLICT after partial writes, marking the consumer tx rollback-only (Task 6 e2e bug).
         int spendable = spendableBalance(userId);
-        int usable = Math.min(maxCoins, (spendable / COINS_PER_YUAN) * COINS_PER_YUAN); // floored to 100
+        int usable = Math.min(maxCoins, (spendable / Money.COINS_PER_YUAN) * Money.COINS_PER_YUAN); // floored to 100
         p.setEligible(true);
         p.setMaxCoins(maxCoins);
         p.setBalance(balance);

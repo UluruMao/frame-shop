@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iflytek.frame.common.OrderStatus;
 import com.iflytek.frame.common.PaymentMethod;
+import com.iflytek.frame.common.Money;
 import com.iflytek.frame.entity.Order;
 import com.iflytek.frame.entity.OrderItem;
 import com.iflytek.frame.entity.Product;
@@ -264,9 +265,9 @@ public class StreamConsumerService {
             // order row). The consumer's @Transactional coin deduction runs AFTER the stock backstop
             // succeeds, so a FAILED order (coins never spent) still persists paidInCents — but FAILED
             // orders are never paid, so paidInCents is informational there. Coins map 1:1 to cents
-            // (100 coins = ¥1 = 100 cents — see CoinServiceImpl.COINS_PER_YUAN + awardReviewReward's
+            // (100 coins = ¥1 = 100 cents — see Money.COINS_PER_YUAN + awardReviewReward's
             // paidInCents/100), so the discount in cents equals the coin amount directly.
-            int coinDiscountCents = (useCoins && coinAmount > 0) ? coinAmount : 0;
+            int coinDiscountCents = (useCoins && coinAmount > 0) ? Money.coinsToCents(coinAmount) : 0;
             int paidInCents = totalInCents - coinDiscountCents;
             order.setPaidInCents(paidInCents);
 

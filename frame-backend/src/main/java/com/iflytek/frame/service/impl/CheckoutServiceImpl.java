@@ -1,6 +1,7 @@
 package com.iflytek.frame.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.iflytek.frame.common.Money;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.dto.CheckoutRequest;
 import com.iflytek.frame.dto.CheckoutResponse;
@@ -147,11 +148,8 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
 
         // 4. Compute total from DB prices.
-        int totalInCents = 0;
         Map<Long, Product> byId = products.stream().collect(Collectors.toMap(Product::getId, p -> p));
-        for (Map.Entry<Long, Integer> e : qtyByProduct.entrySet()) {
-            totalInCents += byId.get(e.getKey()).getPriceInCents() * e.getValue();
-        }
+        int totalInCents = Money.subtotalCents(byId, qtyByProduct);
 
         // 5. LPUSH to orders:pending + set order_status = queued, return 202.
         Long orderId = ORDER_SEQ.incrementAndGet();
