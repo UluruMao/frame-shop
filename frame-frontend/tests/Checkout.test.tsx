@@ -187,9 +187,10 @@ describe('Checkout three-stage flow', () => {
     })
     // The pay button shows the amount (more specific than getByText which
     // would match both the total row and the button).
-    expect(screen.getByRole('button', { name: /pay \$25\.00/i })).toBeInTheDocument()
+    // formatPrice now returns CNY (¥), so the amount renders as ¥25.00.
+    expect(screen.getByRole('button', { name: /pay ¥25\.00/i })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /pay \$25\.00/i }))
+    await user.click(screen.getByRole('button', { name: /pay ¥25\.00/i }))
 
     // Stage 3b: paid → confirmation.
     expect(mockedPayOrder).toHaveBeenCalledWith(4242)

@@ -1,24 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShoppingCart, Loader2, CheckCircle2, XCircle, CreditCard, RotateCw } from 'lucide-react'
+import { ShoppingCart, CheckCircle2, XCircle, CreditCard, RotateCw } from 'lucide-react'
 import { checkout, getOrder, payOrder } from '@/api/order'
 import { getCoinBalance } from '@/api/coin'
-import type { Order, OrderStatus, PaymentMethod } from '@/api/types'
+import type { Order, PaymentMethod } from '@/api/types'
 import { useCart } from '@/store/CartContext'
-import { formatPrice } from './Products'
-
-/** Color for each lifecycle status badge (all 9 OrderStatus values). */
-const STATUS_COLORS: Record<OrderStatus, string> = {
-  PENDING: 'bg-amber-100 text-amber-700',
-  PAID: 'bg-green-100 text-green-700',
-  CANCELLED: 'bg-slate-100 text-slate-600',
-  FAILED: 'bg-red-100 text-red-700',
-  SHIPPED: 'bg-indigo-100 text-indigo-700',
-  DELIVERED: 'bg-blue-100 text-blue-700',
-  COMPLETED: 'bg-slate-100 text-slate-600',
-  REFUND_PENDING: 'bg-orange-100 text-orange-700',
-  REFUNDED: 'bg-red-100 text-red-700',
-}
+import Button from '@/components/ui/Button'
+import Input from '@/components/ui/Input'
+import Field from '@/components/ui/Field'
+import Card from '@/components/ui/Card'
+import StatusBadge from '@/components/ui/StatusBadge'
+import PageHeader from '@/components/ui/PageHeader'
+import Spinner from '@/components/ui/Spinner'
+import { formatPrice } from '@/lib/format'
 
 /** Payment-method radio options shown in the checkout form. */
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string }[] = [
@@ -198,25 +192,25 @@ export default function Checkout() {
   if (items.length === 0 && stage === 'form') {
     return (
       <div className="space-y-4">
-        <PageHeader />
-        <div className="bg-white border border-slate-200 rounded-lg p-6 text-center text-slate-500 text-sm">
+        <PageHeader title="Checkout" icon={<ShoppingCart className="w-5 h-5 text-brand-600" />} />
+        <Card className="p-6 text-center text-slate-500 text-sm">
           Your cart is empty.{' '}
           <button onClick={() => navigate('/products')} className="text-brand-600 hover:underline">
             Browse products
           </button>
-        </div>
+        </Card>
       </div>
     )
   }
 
   return (
     <div className="space-y-4">
-      <PageHeader />
+      <PageHeader title="Checkout" icon={<ShoppingCart className="w-5 h-5 text-brand-600" />} />
 
       {/* Stage 1: form */}
       {stage === 'form' && (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <Card className="p-4">
             <h2 className="text-sm font-medium text-slate-700 mb-3">Order summary</h2>
             <div className="space-y-1">
               {items.map((i) => (
@@ -232,37 +226,47 @@ export default function Checkout() {
               <span className="text-slate-800">Total</span>
               <span className="text-slate-900">{formatPrice(totalCents)}</span>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+          <Card className="p-4 space-y-3">
             <h2 className="text-sm font-medium text-slate-700">Shipping details</h2>
-            <Field label="Name" id="customerName" value={customerName} onChange={setCustomerName} required />
-            <Field
-              label="Email"
-              id="customerEmail"
-              type="email"
-              value={customerEmail}
-              onChange={setCustomerEmail}
-              required
-            />
-            <Field
-              label="Shipping address"
-              id="shippingAddress"
-              value={shippingAddress}
-              onChange={setShippingAddress}
-              required
-            />
-            <Field
-              label="Phone"
-              id="customerPhone"
-              type="tel"
-              value={customerPhone}
-              onChange={setCustomerPhone}
-              required
-            />
-          </div>
+            <Field label="Name" id="customerName">
+              <Input
+                id="customerName"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Email" id="customerEmail">
+              <Input
+                id="customerEmail"
+                type="email"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Shipping address" id="shippingAddress">
+              <Input
+                id="shippingAddress"
+                value={shippingAddress}
+                onChange={(e) => setShippingAddress(e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Phone" id="customerPhone">
+              <Input
+                id="customerPhone"
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                required
+              />
+            </Field>
+          </Card>
 
-          <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+          <Card className="p-4 space-y-3">
             <h2 className="text-sm font-medium text-slate-700">Payment method</h2>
             <div role="radiogroup" className="flex gap-4">
               {PAYMENT_OPTIONS.map((opt) => (
@@ -282,9 +286,9 @@ export default function Checkout() {
                 </label>
               ))}
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+          <Card className="p-4 space-y-3">
             <h2 className="text-sm font-medium text-slate-700">金币 (UC012)</h2>
             {hasFlash ? (
               <p className="text-xs text-slate-500">折扣商品无法使用金币</p>
@@ -318,53 +322,50 @@ export default function Checkout() {
                 )}
               </>
             )}
-          </div>
+          </Card>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
-          <button
-            type="submit"
-            className="w-full py-2.5 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 flex items-center justify-center gap-2"
-          >
-            <ShoppingCart className="w-4 h-4" />
+          <Button type="submit" className="w-full py-2.5" icon={<ShoppingCart className="w-4 h-4" />}>
             Place order
-          </button>
+          </Button>
         </form>
       )}
 
       {/* Stage 2: queued — polling the consumer */}
       {stage === 'queued' && (
-        <div className="bg-white border border-slate-200 rounded-lg p-8 flex flex-col items-center gap-3 text-center">
-          <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
+        <Card className="p-8 flex flex-col items-center gap-3 text-center">
+          <Spinner className="w-8 h-8" />
           <h2 className="text-sm font-medium text-slate-800">Reserving stock…</h2>
           <p className="text-xs text-slate-500">
             Order #{orderId} queued. Waiting for confirmation…
           </p>
-        </div>
+        </Card>
       )}
 
       {/* Stage 3a: resolved — PENDING (pay) or FAILED (retry) */}
       {stage === 'resolved' && (
         <div className="space-y-4">
           {order && order.status === 'FAILED' ? (
-            <div className="bg-white border border-slate-200 rounded-lg p-8 flex flex-col items-center gap-3 text-center">
+            <Card className="p-8 flex flex-col items-center gap-3 text-center">
               <XCircle className="w-8 h-8 text-red-600" />
               <h2 className="text-sm font-medium text-slate-800">Order failed</h2>
               <p className="text-xs text-slate-500">
                 We couldn't reserve the stock for order #{orderId}.
               </p>
               {error && <p className="text-xs text-red-600">{error}</p>}
-              <button
+              <Button
+                variant="secondary"
                 onClick={handleRetry}
-                className="mt-2 flex items-center gap-1.5 px-4 py-2 rounded-md bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200"
+                className="mt-2"
+                icon={<RotateCw className="w-4 h-4" />}
               >
-                <RotateCw className="w-4 h-4" />
                 Try again
-              </button>
-            </div>
+              </Button>
+            </Card>
           ) : order ? (
             <div className="space-y-4">
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
+              <Card className="p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <CheckCircle2 className="w-5 h-5 text-green-600" />
                   <h2 className="text-sm font-medium text-slate-800">Stock reserved</h2>
@@ -383,18 +384,18 @@ export default function Checkout() {
                     <span className="text-slate-900">{formatPrice(order.paidInCents || order.totalInCents)}</span>
                   </div>
                 </div>
-              </div>
+              </Card>
 
               {error && <p className="text-sm text-red-600">{error}</p>}
 
-              <button
+              <Button
                 onClick={handlePay}
-                disabled={paying}
-                className="w-full py-2.5 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-2"
+                loading={paying}
+                className="w-full py-2.5"
+                icon={<CreditCard className="w-4 h-4" />}
               >
-                <CreditCard className="w-4 h-4" />
                 {paying ? 'Processing…' : `Pay ${formatPrice(order.paidInCents || order.totalInCents)}`}
-              </button>
+              </Button>
             </div>
           ) : null}
         </div>
@@ -402,75 +403,22 @@ export default function Checkout() {
 
       {/* Stage 3b: paid — confirmation */}
       {stage === 'paid' && order && (
-        <div className="bg-white border border-slate-200 rounded-lg p-8 flex flex-col items-center gap-3 text-center">
+        <Card className="p-8 flex flex-col items-center gap-3 text-center">
           <CheckCircle2 className="w-10 h-10 text-green-600" />
           <h2 className="text-base font-semibold text-slate-800">Payment successful</h2>
           <p className="text-sm text-slate-500">
             Order #{orderId} is confirmed and paid.
           </p>
           <div className="flex gap-2 mt-2">
-            <button
-              onClick={() => navigate('/orders')}
-              className="px-4 py-2 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
-            >
+            <Button variant="primary" onClick={() => navigate('/orders')}>
               View orders
-            </button>
-            <button
-              onClick={() => navigate('/products')}
-              className="px-4 py-2 rounded-md bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200"
-            >
+            </Button>
+            <Button variant="secondary" onClick={() => navigate('/products')}>
               Continue shopping
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
     </div>
-  )
-}
-
-function PageHeader() {
-  return (
-    <div className="flex items-center gap-2">
-      <ShoppingCart className="w-5 h-5 text-brand-600" />
-      <h1 className="text-xl font-semibold text-slate-800">Checkout</h1>
-    </div>
-  )
-}
-
-function Field({
-  label,
-  id,
-  value,
-  onChange,
-  type = 'text',
-  required = false,
-}: {
-  label: string
-  id: string
-  value: string
-  onChange: (v: string) => void
-  type?: string
-  required?: boolean
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="block text-sm text-slate-600" htmlFor={id}>
-        {label}
-      </label>
-      <input
-        id={id}
-        type={type}
-        required={required}
-        className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
-  )
-}
-
-function StatusBadge({ status }: { status: OrderStatus }) {
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[status]}`}>{status}</span>
   )
 }
