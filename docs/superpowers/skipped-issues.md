@@ -17,3 +17,38 @@ Deliberate skip-and-return entries: things intentionally left undone (with a fal
 
 
 
+---
+
+# UI Kit & Backend Consolidation branch (feature/ui-kit-and-consolidation, 2026-08-26)
+
+Plan: `docs/superpowers/plans/2026-08-25-frontend-beautify-and-reuse.md`. All 23 implementation tasks done + review-clean (2 needed a fix round, both resolved).
+
+## Deferred to final-review triage (frontend minors)
+- **`formatPrice` no input validation** (NaN/negative/float) — YAGNI for kit; pages feed real data. (T1)
+- **Button has no `success` variant** → Checkout Pay button shifted green→brand-blue. Optional follow-up: add `success` variant if the green "go" affordance is product-critical. (T7)
+- **StatusBadge test asserts only `bg-*-100`, not `text-*-700`** — could assert both halves. (T4)
+- **Orders.tsx `rows.map` fragment-as-map-root without key** (key on inner `<tr>`) — pre-existing React key-warning, carried over. Optional structural fix. (T8)
+
+## Deferred to final-review triage (backend minors)
+- **`AdminEndpointSecurityTest` tautological vs URL matcher** (T21) — a USER token 403s via the URL matcher regardless of `@EnableMethodSecurity`, so the test can't detect removal of method security. A method-layer-isolating test would be stronger.
+- **`Money.subtotalCents` null-guard** only on unreachable path (callers pre-validate). Optional Javadoc note. (T15)
+- **`coinsToCents`/`centsToCoins`** intentional 1:1 semantic no-ops per brief. (T15)
+- **`PasswordServiceImplTest.changePassword_oldMismatch_throws`** runs with no SecurityContext → passes via UNAUTHORIZED not its named path; `requireUserMatching` stub is dead code. Pre-existing, not introduced by T18. (T18)
+- **`IdempotentInsert`** converted CoinServiceImpl debug logs drop `e.getMessage()` — rare-race debug path; brief's own example dropped the log entirely. (T19)
+- **`StreamConsumerService` raw-exception catch is broad `Exception`** — non-serialization escape mislabeled "serialization failed". Already-error path, brief-mandated message. (T20)
+
+## E2E validation gap (resolved by VM redeploy — Tasks 27/28)
+- The e2e suite (`e2e/run-tests.mjs`) runs against the **live deployed VM** (`localhost:8888`), which still runs the OLD backend (pre-this-branch).
+- Cannot yet validate the new contract introduced by:
+  - **T22 (pagination `page`→`current`)** — the breaking change. Frontend `api/chat.ts` + e2e `chat.test.mjs` + `ChatIntegrationTest` all send `current=`; backend `mvn test` 180/180 green. True end-to-end validation requires redeploying the VM (T27/T28), then re-running `node e2e/run-tests.mjs`.
+  - **T21 (`@PreAuthorize`)** + **T23 (`@Phone`/`@SmsCode`)** — likewise fully validated only once the new backend is deployed.
+- T22 report: e2e run 50/67, all 17 failures = pre-existing SMS-registration cascade on the old-VM backend (NOT caused by this branch); new `current=` URLs confirmed sent in run-log.
+- **Action at T27/T28:** redeploy the VM with the new jar, re-run `node e2e/run-tests.mjs`, confirm 67/67 (or documented green baseline). The cloud-server deployment (T25–T30, `172.29.231.145`) is a SEPARATE host and does NOT satisfy this — the VM redeploy does.
+
+## Done-but-noted deviations (in-scope, not blockers)
+- **T16**: `CoinServiceImpl` + `ChatServiceImpl` page methods NOT switched to `PageResults.of(page)` — they pass transformed VO lists (not `page.getRecords()`); switching would change behavior. Optional future: mapper-accepting overload.
+- **T19**: 2/5 `try{insert}catch(DataIntegrityViolationException)` sites left inline (ChatServiceImpl + StreamConsumerService) — catch blocks rethrow the original exception, which `Supplier<T> onDuplicate` can't access. Genuine signature limitation.
+- **T23**: `@ValidPassword` skipped — static `validPassword` also used by non-DTO service methods; annotation would duplicate not consolidate + shift error shape.
+
+
+
