@@ -141,7 +141,7 @@ export default function Checkout() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (items.length === 0) {
-      setError('Your cart is empty')
+      setError('购物车为空')
       return
     }
     setError(null)
@@ -192,11 +192,11 @@ export default function Checkout() {
   if (items.length === 0 && stage === 'form') {
     return (
       <div className="space-y-4">
-        <PageHeader title="Checkout" icon={<ShoppingCart className="w-5 h-5 text-brand-600" />} />
+        <PageHeader title="结算" icon={<ShoppingCart className="w-5 h-5 text-brand-600" />} />
         <Card className="p-6 text-center text-slate-500 text-sm">
-          Your cart is empty.{' '}
+          购物车为空。{' '}
           <button onClick={() => navigate('/products')} className="text-brand-600 hover:underline">
-            Browse products
+            去逛逛
           </button>
         </Card>
       </div>
@@ -205,13 +205,13 @@ export default function Checkout() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Checkout" icon={<ShoppingCart className="w-5 h-5 text-brand-600" />} />
+      <PageHeader title="结算" icon={<ShoppingCart className="w-5 h-5 text-brand-600" />} />
 
       {/* Stage 1: form */}
       {stage === 'form' && (
         <form onSubmit={handleSubmit} className="space-y-4">
           <Card className="p-4">
-            <h2 className="text-sm font-medium text-slate-700 mb-3">Order summary</h2>
+            <h2 className="text-sm font-medium text-slate-700 mb-3">订单摘要</h2>
             <div className="space-y-1">
               {items.map((i) => (
                 <div key={i.productId} className="flex justify-between text-sm">
@@ -223,14 +223,14 @@ export default function Checkout() {
               ))}
             </div>
             <div className="flex justify-between border-t border-slate-100 mt-2 pt-2 text-sm font-medium">
-              <span className="text-slate-800">Total</span>
+              <span className="text-slate-800">合计</span>
               <span className="text-slate-900">{formatPrice(totalCents)}</span>
             </div>
           </Card>
 
           <Card className="p-4 space-y-3">
-            <h2 className="text-sm font-medium text-slate-700">Shipping details</h2>
-            <Field label="Name" id="customerName">
+            <h2 className="text-sm font-medium text-slate-700">收货信息</h2>
+            <Field label="姓名" id="customerName">
               <Input
                 id="customerName"
                 value={customerName}
@@ -238,7 +238,7 @@ export default function Checkout() {
                 required
               />
             </Field>
-            <Field label="Email" id="customerEmail">
+            <Field label="邮箱" id="customerEmail">
               <Input
                 id="customerEmail"
                 type="email"
@@ -247,7 +247,7 @@ export default function Checkout() {
                 required
               />
             </Field>
-            <Field label="Shipping address" id="shippingAddress">
+            <Field label="收货地址" id="shippingAddress">
               <Input
                 id="shippingAddress"
                 value={shippingAddress}
@@ -255,7 +255,7 @@ export default function Checkout() {
                 required
               />
             </Field>
-            <Field label="Phone" id="customerPhone">
+            <Field label="手机号" id="customerPhone">
               <Input
                 id="customerPhone"
                 type="tel"
@@ -267,7 +267,7 @@ export default function Checkout() {
           </Card>
 
           <Card className="p-4 space-y-3">
-            <h2 className="text-sm font-medium text-slate-700">Payment method</h2>
+            <h2 className="text-sm font-medium text-slate-700">支付方式</h2>
             <div role="radiogroup" className="flex gap-4">
               {PAYMENT_OPTIONS.map((opt) => (
                 <label
@@ -307,13 +307,13 @@ export default function Checkout() {
                 {useCoins && (
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-slate-600">抵扣金币数</span>
-                    <input
+                    <Input
                       type="number"
                       min={0}
                       max={usableCoins}
                       step={100}
                       aria-label="抵扣金币数"
-                      className="w-24 px-2 py-1 rounded border border-slate-300"
+                      className="w-24"
                       value={coinAmount}
                       onChange={(e) => setCoinAmount(Math.min(Number(e.target.value), usableCoins))}
                     />
@@ -327,7 +327,7 @@ export default function Checkout() {
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <Button type="submit" className="w-full py-2.5" icon={<ShoppingCart className="w-4 h-4" />}>
-            Place order
+            提交订单
           </Button>
         </form>
       )}
@@ -336,9 +336,9 @@ export default function Checkout() {
       {stage === 'queued' && (
         <Card className="p-8 flex flex-col items-center gap-3 text-center">
           <Spinner className="w-8 h-8" />
-          <h2 className="text-sm font-medium text-slate-800">Reserving stock…</h2>
+          <h2 className="text-sm font-medium text-slate-800">正在锁定库存…</h2>
           <p className="text-xs text-slate-500">
-            Order #{orderId} queued. Waiting for confirmation…
+            订单 #{orderId} 已排队，等待确认…
           </p>
         </Card>
       )}
@@ -349,9 +349,9 @@ export default function Checkout() {
           {order && order.status === 'FAILED' ? (
             <Card className="p-8 flex flex-col items-center gap-3 text-center">
               <XCircle className="w-8 h-8 text-red-600" />
-              <h2 className="text-sm font-medium text-slate-800">Order failed</h2>
+              <h2 className="text-sm font-medium text-slate-800">下单失败</h2>
               <p className="text-xs text-slate-500">
-                We couldn't reserve the stock for order #{orderId}.
+                未能为订单 #{orderId} 锁定库存。
               </p>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <Button
@@ -360,7 +360,7 @@ export default function Checkout() {
                 className="mt-2"
                 icon={<RotateCw className="w-4 h-4" />}
               >
-                Try again
+                重试
               </Button>
             </Card>
           ) : order ? (
@@ -368,7 +368,7 @@ export default function Checkout() {
               <Card className="p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  <h2 className="text-sm font-medium text-slate-800">Stock reserved</h2>
+                  <h2 className="text-sm font-medium text-slate-800">库存已锁定</h2>
                 </div>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
@@ -389,12 +389,13 @@ export default function Checkout() {
               {error && <p className="text-sm text-red-600">{error}</p>}
 
               <Button
+                variant="success"
                 onClick={handlePay}
                 loading={paying}
                 className="w-full py-2.5"
                 icon={<CreditCard className="w-4 h-4" />}
               >
-                {paying ? 'Processing…' : `Pay ${formatPrice(order.paidInCents || order.totalInCents)}`}
+                {paying ? '支付中…' : `支付 ${formatPrice(order.paidInCents || order.totalInCents)}`}
               </Button>
             </div>
           ) : null}
@@ -405,16 +406,16 @@ export default function Checkout() {
       {stage === 'paid' && order && (
         <Card className="p-8 flex flex-col items-center gap-3 text-center">
           <CheckCircle2 className="w-10 h-10 text-green-600" />
-          <h2 className="text-base font-semibold text-slate-800">Payment successful</h2>
+          <h2 className="text-base font-semibold text-slate-800">支付成功</h2>
           <p className="text-sm text-slate-500">
-            Order #{orderId} is confirmed and paid.
+            订单 #{orderId} 已确认并支付。
           </p>
           <div className="flex gap-2 mt-2">
             <Button variant="primary" onClick={() => navigate('/orders')}>
-              View orders
+              查看订单
             </Button>
             <Button variant="secondary" onClick={() => navigate('/products')}>
-              Continue shopping
+              继续购物
             </Button>
           </div>
         </Card>

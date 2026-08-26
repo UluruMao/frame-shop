@@ -112,12 +112,12 @@ describe('Checkout three-stage flow', () => {
   it('shows the empty-cart notice when there are no items', () => {
     localStorage.clear()
     renderCheckout()
-    expect(screen.getByText(/your cart is empty/i)).toBeInTheDocument()
+    expect(screen.getByText(/购物车为空/)).toBeInTheDocument()
   })
 
   it('renders a required phone field + the three payment-method radios', () => {
     renderCheckout()
-    const phoneInput = screen.getByLabelText(/phone/i)
+    const phoneInput = screen.getByLabelText(/手机号/)
     expect(phoneInput).toHaveAttribute('required')
     // All three payment-method radios are present (grouped by name).
     const radios = screen.getAllByRole('radio', { name: /微信|支付宝|银行卡/i })
@@ -144,16 +144,16 @@ describe('Checkout three-stage flow', () => {
     renderCheckout()
 
     // Stage 1: fill the form and submit.
-    expect(screen.getByText(/place order/i)).toBeInTheDocument()
-    await user.type(screen.getByLabelText(/name/i), 'Test User')
-    await user.type(screen.getByLabelText(/email/i), 'test@example.com')
-    await user.type(screen.getByLabelText(/shipping address/i), '123 St')
-    await user.type(screen.getByLabelText(/phone/i), '13800138000')
+    expect(screen.getByText(/提交订单/)).toBeInTheDocument()
+    await user.type(screen.getByLabelText(/姓名/), 'Test User')
+    await user.type(screen.getByLabelText(/邮箱/), 'test@example.com')
+    await user.type(screen.getByLabelText(/收货地址/), '123 St')
+    await user.type(screen.getByLabelText(/手机号/), '13800138000')
     // Payment method defaults to WECHAT (微信); select 支付宝 (ALIPAY) to
     // prove the radio drives the submitted payload.
     await user.click(screen.getByLabelText(/支付宝/i))
 
-    await user.click(screen.getByRole('button', { name: /place order/i }))
+    await user.click(screen.getByRole('button', { name: /提交订单/ }))
 
     // Stage 2: checkout() called → shows "queued" spinner.
     expect(mockedCheckout).toHaveBeenCalledTimes(1)
@@ -165,9 +165,9 @@ describe('Checkout three-stage flow', () => {
       }),
     )
     await waitFor(() => {
-      expect(screen.getByText(/reserving stock/i)).toBeInTheDocument()
+      expect(screen.getByText(/正在锁定库存/)).toBeInTheDocument()
     })
-    expect(screen.getByText(/order #4242 queued/i)).toBeInTheDocument()
+    expect(screen.getByText(/订单 #4242 已排队/)).toBeInTheDocument()
 
     // Advance fake timers past the 1s poll interval to trigger the first poll
     // (synthetic placeholder — should keep polling). The immediate poll happens
@@ -183,19 +183,19 @@ describe('Checkout three-stage flow', () => {
 
     // Stage 3a: resolved PENDING → pay UI shows.
     await waitFor(() => {
-      expect(screen.getByText(/stock reserved/i)).toBeInTheDocument()
+      expect(screen.getByText(/库存已锁定/)).toBeInTheDocument()
     })
     // The pay button shows the amount (more specific than getByText which
     // would match both the total row and the button).
     // formatPrice now returns CNY (¥), so the amount renders as ¥25.00.
-    expect(screen.getByRole('button', { name: /pay ¥25\.00/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /支付 ¥25\.00/ })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /pay ¥25\.00/i }))
+    await user.click(screen.getByRole('button', { name: /支付 ¥25\.00/ }))
 
     // Stage 3b: paid → confirmation.
     expect(mockedPayOrder).toHaveBeenCalledWith(4242)
     await waitFor(() => {
-      expect(screen.getByText(/payment successful/i)).toBeInTheDocument()
+      expect(screen.getByText(/支付成功/)).toBeInTheDocument()
     })
   })
 
@@ -216,14 +216,14 @@ describe('Checkout three-stage flow', () => {
 
     renderCheckout()
 
-    await user.type(screen.getByLabelText(/name/i), 'Test User')
-    await user.type(screen.getByLabelText(/email/i), 'test@example.com')
-    await user.type(screen.getByLabelText(/shipping address/i), '123 St')
-    await user.type(screen.getByLabelText(/phone/i), '13800138000')
-    await user.click(screen.getByRole('button', { name: /place order/i }))
+    await user.type(screen.getByLabelText(/姓名/), 'Test User')
+    await user.type(screen.getByLabelText(/邮箱/), 'test@example.com')
+    await user.type(screen.getByLabelText(/收货地址/), '123 St')
+    await user.type(screen.getByLabelText(/手机号/), '13800138000')
+    await user.click(screen.getByRole('button', { name: /提交订单/ }))
 
     await waitFor(() => {
-      expect(screen.getByText(/order #7777 queued/i)).toBeInTheDocument()
+      expect(screen.getByText(/订单 #7777 已排队/)).toBeInTheDocument()
     })
 
     await act(async () => {
@@ -234,9 +234,9 @@ describe('Checkout three-stage flow', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText(/order failed/i)).toBeInTheDocument()
+      expect(screen.getByText(/下单失败/)).toBeInTheDocument()
     })
-    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /重试/ })).toBeInTheDocument()
   })
 
   it('coins checkbox disabled when cart has a flash-sale item', async () => {
@@ -274,14 +274,68 @@ describe('Checkout three-stage flow', () => {
     await user.clear(amountInput)
     await user.type(amountInput, '200')
 
-    await user.type(screen.getByLabelText(/name/i), 'Test User')
-    await user.type(screen.getByLabelText(/email/i), 'test@example.com')
-    await user.type(screen.getByLabelText(/shipping address/i), '123 St')
-    await user.type(screen.getByLabelText(/phone/i), '13800138000')
-    await user.click(screen.getByRole('button', { name: /place order/i }))
+    await user.type(screen.getByLabelText(/姓名/), 'Test User')
+    await user.type(screen.getByLabelText(/邮箱/), 'test@example.com')
+    await user.type(screen.getByLabelText(/收货地址/), '123 St')
+    await user.type(screen.getByLabelText(/手机号/), '13800138000')
+    await user.click(screen.getByRole('button', { name: /提交订单/ }))
 
     expect(vi.mocked(checkout)).toHaveBeenCalledWith(
       expect.objectContaining({ useCoins: true, coinAmount: 200 }),
     )
+  })
+
+  it('uses the Input kit for the coin amount (no raw border classes)', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(getCoinBalance).mockResolvedValue({ balance: 500, claimedToday: true, expiringSoon: 0 })
+
+    renderCheckout()
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/使用金币/)).toBeEnabled()
+    })
+    await user.click(screen.getByLabelText(/使用金币/))
+    const amountInput = await screen.findByLabelText(/抵扣金币数/)
+
+    // The coin-amount input uses the Input kit: it carries the kit's focus-ring
+    // class (focus:ring-brand-500), not the raw hand-rolled
+    // "w-24 px-2 py-1 rounded border border-slate-300" classes. The kit's own
+    // BASE includes border-slate-300 + rounded-md, so the distinguishing mark
+    // is the focus-ring plus the absence of the raw px-2 py-1 padding.
+    expect(amountInput.className).toContain('focus:ring-brand-500')
+    expect(amountInput.className).not.toContain('px-2 py-1')
+  })
+
+  it('renders the Pay button with the success variant (bg-green-600)', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(checkout).mockResolvedValue(mockCheckout())
+    vi.mocked(getOrder)
+      .mockResolvedValueOnce(syntheticQueuedOrder(4242))
+      .mockResolvedValueOnce(realPendingOrder(4242))
+
+    renderCheckout()
+
+    // Fill the form and submit to reach the resolved (PENDING) stage.
+    await user.type(screen.getByLabelText(/姓名/), 'Test User')
+    await user.type(screen.getByLabelText(/邮箱/), 'test@example.com')
+    await user.type(screen.getByLabelText(/收货地址/), '123 St')
+    await user.type(screen.getByLabelText(/手机号/), '13800138000')
+    await user.click(screen.getByRole('button', { name: /提交订单/ }))
+
+    // Advance through the two poll ticks: synthetic → real PENDING.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/库存已锁定/)).toBeInTheDocument()
+    })
+
+    // The Pay button uses the success variant → bg-green-600 class.
+    const payButton = screen.getByRole('button', { name: /支付 ¥25\.00/ })
+    expect(payButton.className).toContain('bg-green-600')
   })
 })
