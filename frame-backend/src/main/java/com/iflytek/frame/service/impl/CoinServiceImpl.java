@@ -108,8 +108,12 @@ public class CoinServiceImpl implements CoinService {
     @Override
     public CoinDiscountPreview previewCheckoutDiscount(Long userId, List<Product> products, Map<Long, Integer> qtyByProduct) {
         CoinDiscountPreview p = new CoinDiscountPreview();
-        boolean hasFlash = products.stream().anyMatch(pr -> Boolean.TRUE.equals(pr.isFlashSale()));
-        if (hasFlash) {
+        // Coins are disabled ONLY when the entire cart is flash-sale items. If the cart
+        // mixes flash + non-flash, coins apply to the non-flash items only — capped by the
+        // user's spendable balance AND the non-flash subtotal (whichever is smaller), NOT by
+        // 50% of the order total.
+        boolean allFlash = products.stream().allMatch(pr -> Boolean.TRUE.equals(pr.isFlashSale()));
+        if (allFlash) {
             p.setEligible(false);
             p.setMaxCoins(0);
             p.setBalance(currentBalance(userId));
@@ -117,24 +121,26 @@ public class CoinServiceImpl implements CoinService {
             p.setReason("coins cannot be used on flash-sale items");
             return p;
         }
+        // Non-flash subtotal — the price ceiling for coin spend (coins can't discount more
+        // than the non-flash goods cost).
         Map<Long, Product> byId = new java.util.HashMap<>();
         for (Product pr : products) {
             byId.put(pr.getId(), pr);
         }
-        int subtotalCents = Money.subtotalCents(byId, qtyByProduct);
-        int maxDiscountCents = subtotalCents / 2; // 50% cap
-        int maxCoins = (maxDiscountCents / Money.COINS_PER_YUAN) * Money.COINS_PER_YUAN; // 100-coin granularity
-        int balance = currentBalance(userId);
-        // `usable` is what spendAtCheckout can actually deduct FIFO (sum of un-spent, un-expired
-        // positive credits), NOT the balance SUM — the balance SUM counts refunded/nullified credits
-        // (via their REFUND_RETURN row) that are not FIFO-spendable. Using the balance SUM here would
-        // report more usable coins than a spend can consume, so the consumer's spendAtCheckout would
-        // throw CONFLICT after partial writes, marking the consumer tx rollback-only (Task 6 e2e bug).
+        int nonFlashSubtotalCents = 0;
+        for (Product pr : products) {
+            if (!Boolean.TRUE.equals(pr.isFlashSale())) {
+                Integer qty = qtyByProduct.get(pr.getId());
+                nonFlashSubtotalCents += pr.getPriceInCents() * (qty != null ? qty : 0);
+            }
+        }
         int spendable = spendableBalance(userId);
-        int usable = Math.min(maxCoins, (spendable / Money.COINS_PER_YUAN) * Money.COINS_PER_YUAN); // floored to 100
+        // Cap = min(spendable balance, non-flash subtotal), floored to 100-coin granularity.
+        int maxCoins = Math.min(spendable, nonFlashSubtotalCents);
+        int usable = (maxCoins / Money.COINS_PER_YUAN) * Money.COINS_PER_YUAN; // floored to 100
         p.setEligible(true);
-        p.setMaxCoins(maxCoins);
-        p.setBalance(balance);
+        p.setMaxCoins(usable);
+        p.setBalance(currentBalance(userId));
         p.setUsable(usable);
         p.setReason(null);
         return p;

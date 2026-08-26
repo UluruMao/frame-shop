@@ -29,7 +29,7 @@ import static org.awaitility.Awaitility.await;
 
 /**
  * UC005 coin branch at checkout — the user opts to spend coins; the hot path validates
- * (flash-sale gating, 50% cap, balance); the async consumer deducts coins atomically with
+ * (flash-sale gating — coins disabled only when the whole cart is flash; cap = min(balance, non-flash subtotal)); the async consumer deducts coins atomically with
  * the order + records {@code paid_in_cents}.
  *
  * <p>Mirrors {@link CheckoutFlowIntegrationTest}'s register/seed/poll approach (SMS code
@@ -126,7 +126,7 @@ class CheckoutWithCoinsIntegrationTest {
     void checkout_withCoins_deductsAndSetsPaidInCents() {
         Long uid = registerTestUser();
         coinService.awardDailyLogin(uid); // +100 coins (100 coins = ¥1 discount)
-        Long pid = seedNonFlashProduct(20000, 5); // ¥200, 50% cap = ¥100 = 100 coins
+        Long pid = seedNonFlashProduct(20000, 5); // ¥200; cap = min(balance 100, non-flash subtotal 20000c) = 100
         CheckoutRequest req = new CheckoutRequest();
         req.setItems(List.of(item(pid, 1)));
         req.setCustomerName("t"); req.setCustomerEmail("t@t.com");
@@ -174,16 +174,16 @@ class CheckoutWithCoinsIntegrationTest {
     }
 
     @Test
-    void checkout_coinAmountOver50Percent_rejected() {
+    void checkout_coinAmountOverCap_rejected() {
         Long uid = registerTestUser();
-        coinService.awardDailyLogin(uid); // +100
-        Long pid = seedNonFlashProduct(20000, 5); // 50% cap = 100 coins
+        coinService.awardDailyLogin(uid); // +100 (balance = cap)
+        Long pid = seedNonFlashProduct(20000, 5); // non-flash subtotal 20000c; cap = min(100, 20000) = 100
         CheckoutRequest req = new CheckoutRequest();
         req.setItems(List.of(item(pid, 1)));
         req.setCustomerName("t"); req.setCustomerEmail("t@t.com");
         req.setShippingAddress("addr"); req.setCustomerPhone("13900000003");
         req.setPaymentMethod("WECHAT"); req.setIdempotencyKey(UUID.randomUUID().toString());
-        req.setUseCoins(true); req.setCoinAmount(300); // > 100 cap
+        req.setUseCoins(true); req.setCoinAmount(300); // > 100 cap (balance-limited)
 
         assertThatThrownByIsBusinessException(() -> checkoutService.checkout(req, uid));
     }

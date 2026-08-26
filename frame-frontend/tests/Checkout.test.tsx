@@ -84,10 +84,21 @@ function seedCart() {
   localStorage.setItem('frame-cart', JSON.stringify(cart))
 }
 
-/** Seed a flash-sale cart item — coins UI must be gated off. */
+/** Seed a flash-sale cart item — coins UI must be gated off (all-flash). */
 function seedFlashCart() {
   const cart = {
     items: [{ productId: 2, name: 'Flash Gizmo', priceInCents: 999, quantity: 1, stock: 10, isFlashSale: true }],
+  }
+  localStorage.setItem('frame-cart', JSON.stringify(cart))
+}
+
+/** Seed a mixed cart (1 flash + 1 non-flash) — coins apply to the non-flash item. */
+function seedMixedCart() {
+  const cart = {
+    items: [
+      { productId: 2, name: 'Flash Gizmo', priceInCents: 999, quantity: 1, stock: 10, isFlashSale: true },
+      { productId: 3, name: 'Regular Item', priceInCents: 2000, quantity: 1, stock: 8, isFlashSale: false },
+    ],
   }
   localStorage.setItem('frame-cart', JSON.stringify(cart))
 }
@@ -239,18 +250,29 @@ describe('Checkout three-stage flow', () => {
     expect(screen.getByRole('button', { name: /重试/ })).toBeInTheDocument()
   })
 
-  it('coins checkbox disabled when cart has a flash-sale item', async () => {
+  it('coins disabled when the WHOLE cart is flash-sale', async () => {
     seedFlashCart()
     vi.mocked(getCoinBalance).mockResolvedValue({ balance: 500, claimedToday: true, expiringSoon: 0 })
     renderCheckout()
 
-    // The flash-sale block shows the "no coins for flash items" message instead
-    // of the checkbox.
+    // All-flash carts show the "no coins" message instead of the checkbox.
     await waitFor(() => {
-      expect(screen.getByText(/折扣商品无法使用金币/)).toBeInTheDocument()
+      expect(screen.getByText(/全部商品为折扣商品，无法使用金币/)).toBeInTheDocument()
     })
-    // The 使用金币 checkbox is NOT rendered for flash carts.
     expect(screen.queryByLabelText(/使用金币/)).not.toBeInTheDocument()
+  })
+
+  it('coins enabled on a mixed cart (flash + non-flash); cap = min(balance, non-flash subtotal)', async () => {
+    // 1 flash (¥9.99) + 1 non-flash (¥20.00). Coins eligible; non-flash subtotal = 2000c.
+    seedMixedCart()
+    vi.mocked(getCoinBalance).mockResolvedValue({ balance: 500, claimedToday: true, expiringSoon: 0 })
+    renderCheckout()
+    await waitFor(() => expect(screen.getByText('提交订单')).toBeInTheDocument())
+
+    // The checkbox renders (coins are NOT disabled for mixed carts).
+    expect(screen.getByLabelText(/使用金币/)).toBeInTheDocument()
+    // The "all flash" block message does NOT render.
+    expect(screen.queryByText(/全部商品为折扣商品/)).not.toBeInTheDocument()
   })
 
   it('submitting with useCoins includes coinAmount', async () => {

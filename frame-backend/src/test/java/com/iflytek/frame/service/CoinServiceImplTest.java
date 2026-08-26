@@ -118,7 +118,7 @@ class CoinServiceImplTest {
     }
 
     @Test
-    void previewCheckoutDiscount_rejectsFlashSaleCart() {
+    void previewCheckoutDiscount_rejectsAllFlashCart() {
         Product flash = new Product();
         flash.setId(1L); flash.setPriceInCents(1000); flash.setFlashSale(true);
         CoinDiscountPreview p = coinService.previewCheckoutDiscount(1L, List.of(flash), Map.of(1L, 1));
@@ -127,14 +127,28 @@ class CoinServiceImplTest {
     }
 
     @Test
-    void previewCheckoutDiscount_capsAt50PercentAndBalance() {
+    void previewCheckoutDiscount_mixedCartAppliesCoinsToNonFlashOnly() {
+        // 1 flash (¥10) + 1 non-flash (¥20). Coins eligible; cap = min(balance, non-flash subtotal ¥20 = 2000c).
+        Product flash = new Product();
+        flash.setId(1L); flash.setPriceInCents(1000); flash.setFlashSale(true);
+        Product regular = new Product();
+        regular.setId(2L); regular.setPriceInCents(2000); regular.setFlashSale(false);
+        when(coinMapper.selectSpendableBalance(1L)).thenReturn(5000); // balance exceeds non-flash subtotal
+        CoinDiscountPreview r = coinService.previewCheckoutDiscount(1L, List.of(flash, regular), Map.of(1L, 1, 2L, 1));
+        assertThat(r.getEligible()).isTrue();
+        // non-flash subtotal = 2000c; spendable 5000 > 2000 → cap = 2000, floored to 100 → 2000.
+        assertThat(r.getUsable()).isEqualTo(2000);
+    }
+
+    @Test
+    void previewCheckoutDiscount_capsAtNonFlashSubtotalAndBalance() {
         Product p = new Product();
-        p.setId(1L); p.setPriceInCents(2000); p.setFlashSale(false); // subtotal ¥20, 50% = ¥10 = 1000 coins
-        when(coinMapper.selectBalance(1L)).thenReturn(500); // balance 500 < 1000 max
-        when(coinMapper.selectSpendableBalance(1L)).thenReturn(500); // all 500 are FIFO-spendable
+        p.setId(1L); p.setPriceInCents(2000); p.setFlashSale(false); // non-flash subtotal ¥20 = 2000c
+        when(coinMapper.selectBalance(1L)).thenReturn(500); // balance 500 < 2000 cap
+        when(coinMapper.selectSpendableBalance(1L)).thenReturn(500); // all 500 FIFO-spendable
         CoinDiscountPreview r = coinService.previewCheckoutDiscount(1L, List.of(p), Map.of(1L, 1));
         assertThat(r.getEligible()).isTrue();
-        assertThat(r.getMaxCoins()).isEqualTo(1000);
+        assertThat(r.getMaxCoins()).isEqualTo(500);
         assertThat(r.getUsable()).isEqualTo(500); // clamped to spendable, floored to 100
     }
 

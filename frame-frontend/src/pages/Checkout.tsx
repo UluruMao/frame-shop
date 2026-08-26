@@ -61,10 +61,14 @@ export default function Checkout() {
   const [coinBalance, setCoinBalance] = useState(0)
   const [useCoins, setUseCoins] = useState(false)
   const [coinAmount, setCoinAmount] = useState(0)
-  const hasFlash = items.some((i) => i.isFlashSale)
+  // Coins: disabled only when the WHOLE cart is flash-sale. Mixed carts apply coins
+  // to the non-flash items, capped by the user's balance AND the non-flash subtotal
+  // (whichever is smaller). The backend (CoinServiceImpl) is the real authority; this
+  // mirrors it so the UI shows the right cap.
+  const allFlash = items.length > 0 && items.every((i) => i.isFlashSale)
+  const nonFlashSubtotalCents = items.filter((i) => !i.isFlashSale).reduce((s, i) => s + i.priceInCents * i.quantity, 0)
   const subtotalCents = totalCents
-  const maxCoins = Math.floor((subtotalCents / 2) / 100) * 100 // 50% cap, 100-coin granularity
-  const usableCoins = Math.min(maxCoins, Math.floor(coinBalance / 100) * 100)
+  const usableCoins = allFlash ? 0 : Math.min(Math.floor(coinBalance / 100) * 100, nonFlashSubtotalCents)
   // CORRECTED: coins map 1:1 to cents (100 coins = ¥1 = 100 cents), so
   // coinAmount coins = coinAmount cents of discount — NOT Math.floor(coinAmount / 100).
   const coinDiscountCents = useCoins ? coinAmount : 0
@@ -330,8 +334,8 @@ export default function Checkout() {
 
           <Card className="p-4 space-y-3">
             <h2 className="text-sm font-medium text-slate-700">金币 (UC012)</h2>
-            {hasFlash ? (
-              <p className="text-xs text-slate-500">折扣商品无法使用金币</p>
+            {allFlash ? (
+              <p className="text-xs text-slate-500">全部商品为折扣商品，无法使用金币</p>
             ) : (
               <>
                 <label className="flex items-center gap-2 text-sm text-slate-700">
