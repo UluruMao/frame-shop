@@ -37,6 +37,11 @@ mariadb -u root -p # connects
    ```bash
    mariadb -u root -p < src/main/resources/schema.sql
    ```
+   > **Demo seed:** `schema.sql` includes demo data (4 non-admin users, ~7 products,
+   > ~35 orders across statuses + 6 months, ~30 reviews, coin rows) so the admin
+   > Dashboard shows realistic numbers. This is NOT production data — re-run
+   > `mariadb -u root -p < src/main/resources/schema.sql` to reset to the seed.
+   > Demo users share the password `admin123`.
 2. **Set your DB password + JWT secret** in `src/main/resources/application.yml`:
    ```yaml
    spring:

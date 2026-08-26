@@ -43,4 +43,21 @@ class AdminStatsMapperTest {
         List<DashboardStatsVO.MonthRevenue> months = adminStatsMapper.monthlyRevenue();
         assertThat(months).hasSizeLessThanOrEqualTo(6);
     }
+
+    /**
+     * Realistic-numbers assertion (Task 21): after the {@code schema.sql} demo seed is applied to
+     * the dev DB, the dashboard shows believable values instead of zeros. Like the rest of this
+     * test class, this runs against the live dev {@code frame_db} via {@code @SpringBootTest}, so
+     * it only passes once {@code schema.sql} has been (re)applied — re-run
+     * {@code mariadb -u root -p frame_db < src/main/resources/schema.sql} if it fails.
+     */
+    @Test
+    void seededDataProducesRealisticDashboard() {
+        DashboardStatsVO stats = adminStatsMapper.dashboardStats();
+        // After the seed: >0 revenue, >0 orders, >0 products, avg rating between 3 and 5.
+        assertThat(stats.totalProducts()).isGreaterThan(2);
+        assertThat(stats.totalOrders()).isGreaterThan(50);
+        assertThat(stats.totalRevenueCents()).isGreaterThan(10_000);
+        assertThat(stats.avgRating()).isBetween(3.0, 5.0);
+    }
 }
