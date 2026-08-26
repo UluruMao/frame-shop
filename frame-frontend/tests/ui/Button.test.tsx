@@ -17,6 +17,10 @@ describe('Button', () => {
     render(<Button variant="danger">Delete</Button>)
     expect(screen.getByRole('button')).toHaveClass('bg-red-600')
   })
+  it('applies success variant classes', () => {
+    render(<Button variant="success">支付</Button>)
+    expect(screen.getByRole('button')).toHaveClass('bg-green-600')
+  })
   it('disables and shows spinner when loading', () => {
     render(<Button loading>Loading</Button>)
     const btn = screen.getByRole('button')
