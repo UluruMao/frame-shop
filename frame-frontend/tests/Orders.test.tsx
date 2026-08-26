@@ -89,6 +89,32 @@ beforeEach(() => {
   ;(listOrderReviews as any).mockResolvedValue([])
 })
 
+describe('Orders — Chinese labels (kit sweep regression guard)', () => {
+  it('renders Chinese tab labels 全部/未付款/未发货/未签收/已完成/未评价', async () => {
+    renderOrders()
+    await waitFor(() => expect(screen.getByText('全部')).toBeInTheDocument())
+    expect(screen.getByText('未付款')).toBeInTheDocument()
+    expect(screen.getByText('未发货')).toBeInTheDocument()
+    expect(screen.getByText('未签收')).toBeInTheDocument()
+    expect(screen.getByText('已完成')).toBeInTheDocument()
+    expect(screen.getByText('未评价')).toBeInTheDocument()
+  })
+
+  it('page header + refresh button are Chinese', async () => {
+    renderOrders()
+    await waitFor(() => expect(screen.getByText('全部')).toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: /我的订单/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /刷新/ })).toBeInTheDocument()
+  })
+
+  it('empty state shows Chinese 没有订单 + 去购物 CTA', async () => {
+    ;(getMyOrders as any).mockResolvedValue(page([]))
+    renderOrders()
+    await waitFor(() => expect(screen.getByText(/没有订单/)).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /去购物/ })).toBeInTheDocument()
+  })
+})
+
 describe('Orders — tabs (Phase C)', () => {
   it('renders the 6 tabs incl. an active (clickable) 未评价 tab', async () => {
     renderOrders()

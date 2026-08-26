@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ClipboardList, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { ClipboardList, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   getMyOrders,
   cancelOrder,
@@ -13,21 +13,14 @@ import {
 import { listUnreviewedOrders, listOrderReviews } from '@/api/review'
 import ReviewModal from '@/components/ReviewModal'
 import Button from '@/components/ui/Button'
+import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import StatusBadge from '@/components/ui/StatusBadge'
+import Table from '@/components/ui/Table'
+import Tabs from '@/components/ui/Tabs'
 import { Textarea } from '@/components/ui/Input'
 import { formatPrice } from '@/lib/format'
 import type { Order, OrderItem, OrderStatus, Review } from '@/api/types'
-
-/** Tab label → status filter passed to getMyOrders. undefined = all statuses. */
-const TABS: { label: string; status?: OrderStatus; unreviewed?: boolean }[] = [
-  { label: '全部' },
-  { label: '未付款', status: 'PENDING' },
-  { label: '未发货', status: 'PAID' },
-  { label: '未签收', status: 'SHIPPED' },
-  { label: '已完成', status: 'COMPLETED' },
-  { label: '未评价', unreviewed: true },
-]
 
 /**
  * My orders: tabbed view with per-status actions, a refund-reason modal, and an
@@ -182,253 +175,238 @@ export default function Orders() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <PageHeader
-          title="My Orders"
+          title="我的订单"
           icon={<ClipboardList className="w-5 h-5 text-brand-600" />}
           count={total}
         />
         <Button variant="ghost" size="sm" onClick={load} icon={<RefreshCw className="w-4 h-4" />}>
-          Refresh
+          刷新
         </Button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200">
-        {TABS.map((tab) => {
-          const active = unreviewedMode ? !!tab.unreviewed : tab.status === activeStatus
-          return (
-            <button
-              key={tab.label}
-              onClick={() => {
-                setActiveStatus(tab.status)
-                setUnreviewedMode(!!tab.unreviewed)
-              }}
-              className={[
-                'px-3 py-2 text-sm border-b-2 -mb-px transition-colors',
-                active
-                  ? 'border-brand-600 text-brand-600 font-medium'
-                  : 'border-transparent text-slate-600 hover:text-slate-800',
-              ].join(' ')}
-            >
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
+      <Tabs
+        activeKey={unreviewedMode ? 'unreviewed' : (activeStatus ?? 'all')}
+        onTabChange={(key) => {
+          if (key === 'unreviewed') {
+            setUnreviewedMode(true)
+            setActiveStatus(undefined)
+          } else {
+            setUnreviewedMode(false)
+            setActiveStatus(key === 'all' ? undefined : (key as OrderStatus))
+          }
+        }}
+        tabs={[
+          { key: 'all', label: '全部', content: null },
+          { key: 'PENDING', label: '未付款', content: null },
+          { key: 'PAID', label: '未发货', content: null },
+          { key: 'SHIPPED', label: '未签收', content: null },
+          { key: 'COMPLETED', label: '已完成', content: null },
+          { key: 'unreviewed', label: '未评价', content: null },
+        ]}
+      />
 
-      {loading && <p className="text-sm text-slate-500">Loading…</p>}
+      {loading && <p className="text-sm text-slate-500">加载中…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {!loading && !error && (
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-600">
-              <tr>
-                <th className="text-left px-4 py-2 font-medium">Order</th>
-                <th className="text-left px-4 py-2 font-medium">Customer</th>
-                <th className="text-right px-4 py-2 font-medium">Total</th>
-                <th className="text-left px-4 py-2 font-medium">Status</th>
-                <th className="text-left px-4 py-2 font-medium">Created</th>
-                <th className="text-right px-4 py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((o) => (
-                <>
-                  <tr key={o.id} className="border-t border-slate-100">
-                    <td className="px-4 py-2 text-slate-500">
-                      <button
-                        onClick={() => toggleExpand(o.id)}
-                        className="flex items-center gap-1 text-slate-500 hover:text-slate-800"
-                      >
-                        {expandedId === o.id ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                        #{o.id}
-                      </button>
-                    </td>
-                    <td className="px-4 py-2 text-slate-800">{o.customerName}</td>
-                    <td className="px-4 py-2 text-right text-slate-700">
-                      {formatPrice(o.totalInCents)}
-                    </td>
-                    <td className="px-4 py-2">
-                      {o.status === 'REFUND_PENDING' ? (
-                        <StatusBadge status={o.status} label="退款处理中" />
-                      ) : (
-                        <StatusBadge status={o.status} />
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-slate-500">
-                      {o.createTime ? new Date(o.createTime).toLocaleString() : '—'}
-                    </td>
-                    <td className="px-4 py-2 text-right space-x-2">
-                      <Button variant="ghost" size="sm" onClick={() => toggleExpand(o.id)}>
-                        详情
-                      </Button>
-                      {o.status === 'PENDING' && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handlePay(o.id)}
-                            disabled={busyId === o.id}
-                          >
-                            {busyId === o.id ? '处理中…' : '付款'}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCancel(o.id)}
-                            disabled={busyId === o.id}
-                          >
-                            取消
-                          </Button>
-                        </>
-                      )}
-                      {o.status === 'PAID' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCancelPaid(o.id)}
-                          disabled={busyId === o.id}
-                        >
-                          {busyId === o.id ? '处理中…' : '退款'}
-                        </Button>
-                      )}
-                      {o.status === 'SHIPPED' && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleConfirmReceipt(o.id)}
-                            disabled={busyId === o.id}
-                          >
-                            {busyId === o.id ? '处理中…' : '确认收货'}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openRefundModal(o.id)}
-                            disabled={busyId === o.id}
-                          >
-                            申请退款
-                          </Button>
-                        </>
-                      )}
-                      {o.status !== 'PENDING' &&
-                        o.status !== 'PAID' &&
-                        o.status !== 'SHIPPED' &&
-                        o.status !== 'REFUND_PENDING' && (
-                          <span className="text-xs text-slate-300">—</span>
-                        )}
-                    </td>
-                  </tr>
-                  {expandedId === o.id && (
-                    <tr className="bg-slate-50">
-                      <td colSpan={6} className="px-4 py-3">
-                        {itemsLoading ? (
-                          <p className="text-sm text-slate-500">Loading items…</p>
-                        ) : items.length === 0 ? (
-                          <p className="text-sm text-slate-400">No items.</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {o.trackingNumber &&
-                              (o.status === 'SHIPPED' ||
-                                o.status === 'DELIVERED' ||
-                                o.status === 'COMPLETED') && (
-                                <p className="text-sm text-slate-600">
-                                  Tracking: <span className="font-mono">{o.trackingNumber}</span>
-                                </p>
-                              )}
-                            <ul className="divide-y divide-slate-200">
-                              {items.map((it) => (
-                                <li
-                                  key={it.id}
-                                  className="flex items-center justify-between py-1.5"
-                                >
-                                  <span className="text-slate-700">{it.name}</span>
-                                  <span className="text-slate-500">×{it.quantity}</span>
-                                  <span className="text-slate-700">
-                                    {formatPrice(it.priceInCents)}
-                                  </span>
-                                  {(o.status === 'DELIVERED' ||
-                                    o.status === 'COMPLETED') && (
-                                    <button
-                                      onClick={() =>
-                                        setReviewTarget({
-                                          productId: it.productId,
-                                          existing:
-                                            (reviewsByOrder[o.id] ?? []).find(
-                                              (r) => r.productId === it.productId,
-                                            ) ?? null,
-                                        })
-                                      }
-                                      className="text-xs text-brand-600 hover:underline"
-                                    >
-                                      {(reviewsByOrder[o.id] ?? []).some(
-                                        (r) => r.productId === it.productId,
-                                      )
-                                        ? '编辑评价'
-                                        : '写评价'}
-                                    </button>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
+        <Table<Order>
+          columns={[
+            {
+              key: 'order',
+              header: '订单',
+              render: (o: Order) => (
+                <button
+                  onClick={() => toggleExpand(o.id)}
+                  className="flex items-center gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  {expandedId === o.id ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
                   )}
-                </>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
-                    No orders yet.{' '}
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/products')}>
-                      Start shopping
+                  #{o.id}
+                </button>
+              ),
+            },
+            {
+              key: 'customerName',
+              header: '客户',
+              render: (o: Order) => <span className="text-slate-800">{o.customerName}</span>,
+            },
+            {
+              key: 'total',
+              header: '总额',
+              className: 'text-right',
+              render: (o: Order) => <span className="text-slate-700">{formatPrice(o.totalInCents)}</span>,
+            },
+            {
+              key: 'status',
+              header: '状态',
+              render: (o: Order) =>
+                o.status === 'REFUND_PENDING' ? (
+                  <StatusBadge status={o.status} label="退款处理中" />
+                ) : (
+                  <StatusBadge status={o.status} />
+                ),
+            },
+            {
+              key: 'createTime',
+              header: '创建时间',
+              render: (o: Order) => (
+                <span className="text-slate-500">{o.createTime ? new Date(o.createTime).toLocaleString() : '—'}</span>
+              ),
+            },
+            {
+              key: 'actions',
+              header: '操作',
+              className: 'text-right',
+              render: (o: Order) => (
+                <div className="space-x-2">
+                  <Button variant="ghost" size="sm" onClick={() => toggleExpand(o.id)}>
+                    详情
+                  </Button>
+                  {o.status === 'PENDING' && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handlePay(o.id)}
+                        disabled={busyId === o.id}
+                      >
+                        {busyId === o.id ? '处理中…' : '付款'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCancel(o.id)}
+                        disabled={busyId === o.id}
+                      >
+                        取消
+                      </Button>
+                    </>
+                  )}
+                  {o.status === 'PAID' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCancelPaid(o.id)}
+                      disabled={busyId === o.id}
+                    >
+                      {busyId === o.id ? '处理中…' : '退款'}
                     </Button>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                  {o.status === 'SHIPPED' && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleConfirmReceipt(o.id)}
+                        disabled={busyId === o.id}
+                      >
+                        {busyId === o.id ? '处理中…' : '确认收货'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openRefundModal(o.id)}
+                        disabled={busyId === o.id}
+                      >
+                        申请退款
+                      </Button>
+                    </>
+                  )}
+                  {o.status !== 'PENDING' &&
+                    o.status !== 'PAID' &&
+                    o.status !== 'SHIPPED' &&
+                    o.status !== 'REFUND_PENDING' && <span className="text-xs text-slate-300">—</span>}
+                </div>
+              ),
+            },
+          ]}
+          data={rows}
+          rowKey={(o) => String(o.id)}
+          empty={
+            <>
+              没有订单。{' '}
+              <Button variant="ghost" size="sm" onClick={() => navigate('/products')}>
+                去购物
+              </Button>
+            </>
+          }
+          expandableRow={(o: Order) =>
+            expandedId === o.id ? (
+              itemsLoading ? (
+                <p className="text-sm text-slate-500">加载商品…</p>
+              ) : items.length === 0 ? (
+                <p className="text-sm text-slate-400">暂无商品</p>
+              ) : (
+                <div className="space-y-2">
+                  {o.trackingNumber &&
+                    (o.status === 'SHIPPED' ||
+                      o.status === 'DELIVERED' ||
+                      o.status === 'COMPLETED') && (
+                      <p className="text-sm text-slate-600">
+                        运单号：<span className="font-mono">{o.trackingNumber}</span>
+                      </p>
+                    )}
+                  <ul className="divide-y divide-slate-200">
+                    {items.map((it) => (
+                      <li key={it.id} className="flex items-center justify-between py-1.5">
+                        <span className="text-slate-700">{it.name}</span>
+                        <span className="text-slate-500">×{it.quantity}</span>
+                        <span className="text-slate-700">{formatPrice(it.priceInCents)}</span>
+                        {(o.status === 'DELIVERED' || o.status === 'COMPLETED') && (
+                          <button
+                            onClick={() =>
+                              setReviewTarget({
+                                productId: it.productId,
+                                existing:
+                                  (reviewsByOrder[o.id] ?? []).find(
+                                    (r) => r.productId === it.productId,
+                                  ) ?? null,
+                              })
+                            }
+                            className="text-xs text-brand-600 hover:underline"
+                          >
+                            {(reviewsByOrder[o.id] ?? []).some((r) => r.productId === it.productId)
+                              ? '编辑评价'
+                              : '写评价'}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            ) : null
+          }
+          expandedRowKey={expandedId !== null ? String(expandedId) : null}
+        />
       )}
 
-      {/* Refund-reason modal */}
-      {refundOrderId != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-800">申请退款</h2>
-              <button onClick={closeRefundModal} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-sm text-slate-500">订单 #{refundOrderId}</p>
-            <Textarea
-              value={refundReason}
-              onChange={(e) => setRefundReason(e.target.value)}
-              placeholder="请输入退款原因 / refund reason"
-              rows={3}
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={closeRefundModal}>
-                取消
-              </Button>
-              <Button
-                onClick={submitRefund}
-                disabled={busyId === refundOrderId}
-              >
-                {busyId === refundOrderId ? '提交中…' : '提交'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={refundOrderId != null}
+        onClose={closeRefundModal}
+        title="申请退款"
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={closeRefundModal}>
+              取消
+            </Button>
+            <Button onClick={submitRefund} disabled={busyId === refundOrderId}>
+              {busyId === refundOrderId ? '提交中…' : '提交'}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-500">订单 #{refundOrderId}</p>
+        <Textarea
+          value={refundReason}
+          onChange={(e) => setRefundReason(e.target.value)}
+          placeholder="请输入退款原因"
+          rows={3}
+        />
+      </Modal>
 
       {/* Phase D — review modal for a line item */}
       {reviewTarget && expandedId && (
@@ -441,9 +419,7 @@ export default function Orders() {
             setReviewTarget(null)
             if (expandedId) {
               listOrderReviews(expandedId)
-                .then((r) =>
-                  setReviewsByOrder((p) => ({ ...p, [expandedId]: r })),
-                )
+                .then((r) => setReviewsByOrder((p) => ({ ...p, [expandedId]: r })))
                 .catch(() => {})
             }
             await load()
