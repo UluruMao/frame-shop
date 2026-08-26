@@ -25,6 +25,8 @@ import Input, { Textarea } from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import StatusBadge from '@/components/ui/StatusBadge'
 import Badge from '@/components/ui/Badge'
+import Tabs from '@/components/ui/Tabs'
+import Table from '@/components/ui/Table'
 
 /** Top-level Admin tabs: Products (CRUD), Orders (shipping/refund), and Chat (inbox). */
 type AdminTab = 'products' | 'orders' | 'chat'
@@ -61,6 +63,7 @@ interface FormState {
   priceInCents: string
   stock: string
   category: string
+  imageUrl: string
   description: string
   isFlashSale: boolean
   flashSaleAt: string
@@ -71,6 +74,7 @@ const EMPTY_FORM: FormState = {
   priceInCents: '',
   stock: '',
   category: '',
+  imageUrl: '',
   description: '',
   isFlashSale: false,
   flashSaleAt: '',
@@ -140,9 +144,9 @@ export default function Admin() {
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <Shield className="w-10 h-10 text-slate-300" />
-        <h1 className="text-lg font-semibold text-slate-700">Admin access required</h1>
+        <h1 className="text-lg font-semibold text-slate-700">需要管理员权限</h1>
         <p className="text-sm text-slate-500">
-          You don't have permission to view this page.
+          您没有权限查看此页面。
         </p>
       </div>
     )
@@ -160,6 +164,7 @@ export default function Admin() {
       priceInCents: String(p.priceInCents),
       stock: String(p.stock ?? 0),
       category: p.category ?? '',
+      imageUrl: p.imageUrl ?? '',
       description: p.description ?? '',
       isFlashSale: !!p.isFlashSale,
       flashSaleAt: toDatetimeLocal(p.flashSaleAt),
@@ -175,6 +180,7 @@ export default function Admin() {
       priceInCents: Number(form.priceInCents),
       stock: Number(form.stock),
       category: form.category || undefined,
+      imageUrl: form.imageUrl || undefined,
       description: form.description || undefined,
       isFlashSale: form.isFlashSale,
       flashSaleAt: form.isFlashSale && form.flashSaleAt ? form.flashSaleAt : undefined,
@@ -343,57 +349,40 @@ export default function Admin() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Shield className="w-5 h-5 text-brand-600" />
-        <h1 className="text-xl font-semibold text-slate-800">Admin</h1>
+        <h1 className="text-xl font-semibold text-slate-800">管理后台</h1>
         {tab === 'products' && (
-          <span className="text-sm text-slate-400">({total} products)</span>
+          <span className="text-sm text-slate-400">({total} 件商品)</span>
         )}
         {tab === 'orders' && (
-          <span className="text-sm text-slate-400">({ordersTotal} orders)</span>
+          <span className="text-sm text-slate-400">({ordersTotal} 笔订单)</span>
         )}
         {tab === 'chat' && (
-          <span className="text-sm text-slate-400">({inbox.length} open sessions)</span>
+          <span className="text-sm text-slate-400">({inbox.length} 个开放会话)</span>
         )}
       </div>
 
       {/* Tab switcher */}
-      <div className="flex items-center gap-1 border-b border-slate-200">
-        <button
-          onClick={() => setTab('products')}
-          className={[
-            'px-3 py-2 text-sm border-b-2 -mb-px transition-colors flex items-center gap-1.5',
-            tab === 'products'
-              ? 'border-brand-600 text-brand-600 font-medium'
-              : 'border-transparent text-slate-600 hover:text-slate-800',
-          ].join(' ')}
-        >
-          <Pencil className="w-3.5 h-3.5" />
-          Products
-        </button>
-        <button
-          onClick={() => setTab('orders')}
-          className={[
-            'px-3 py-2 text-sm border-b-2 -mb-px transition-colors flex items-center gap-1.5',
-            tab === 'orders'
-              ? 'border-brand-600 text-brand-600 font-medium'
-              : 'border-transparent text-slate-600 hover:text-slate-800',
-          ].join(' ')}
-        >
-          <Package className="w-3.5 h-3.5" />
-          Orders
-        </button>
-        <button
-          onClick={() => setTab('chat')}
-          className={[
-            'px-3 py-2 text-sm border-b-2 -mb-px transition-colors flex items-center gap-1.5',
-            tab === 'chat'
-              ? 'border-brand-600 text-brand-600 font-medium'
-              : 'border-transparent text-slate-600 hover:text-slate-800',
-          ].join(' ')}
-        >
-          <MessageCircle className="w-3.5 h-3.5" />
-          Chat
-        </button>
-      </div>
+      <Tabs<AdminTab>
+        activeKey={tab}
+        onTabChange={setTab}
+        tabs={[
+          {
+            key: 'products',
+            label: (<span className="flex items-center gap-1.5"><Pencil className="w-3.5 h-3.5" />商品</span>),
+            content: <></>,
+          },
+          {
+            key: 'orders',
+            label: (<span className="flex items-center gap-1.5"><Package className="w-3.5 h-3.5" />订单</span>),
+            content: <></>,
+          },
+          {
+            key: 'chat',
+            label: (<span className="flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5" />客服</span>),
+            content: <></>,
+          },
+        ]}
+      />
 
       {tab === 'products' && (
         <>
@@ -402,17 +391,17 @@ export default function Admin() {
           {/* Create / edit form */}
           <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
         <h2 className="text-sm font-medium text-slate-700">
-          {editingId !== null ? `Edit product #${editingId}` : 'New product'}
+          {editingId !== null ? `编辑商品 #${editingId}` : '新建商品'}
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
-            placeholder="Name"
+            placeholder="名称"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
           />
           <Input
-            placeholder="Price (cents)"
+            placeholder="价格 (分)"
             type="number"
             min={0}
             value={form.priceInCents}
@@ -420,7 +409,7 @@ export default function Admin() {
             required
           />
           <Input
-            placeholder="Stock"
+            placeholder="库存"
             type="number"
             min={0}
             value={form.stock}
@@ -428,13 +417,18 @@ export default function Admin() {
             required
           />
           <Input
-            placeholder="Category (optional)"
+            placeholder="分类 (可选)"
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
           />
+          <Input
+            placeholder="图片链接 (可选)"
+            value={form.imageUrl}
+            onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+          />
         </div>
         <Textarea
-          placeholder="Description (optional)"
+          placeholder="描述 (可选)"
           value={form.description}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
           rows={2}
@@ -445,12 +439,12 @@ export default function Admin() {
             checked={form.isFlashSale}
             onChange={(e) => setForm({ ...form, isFlashSale: e.target.checked })}
           />
-          Flash sale item
+          秒杀商品
         </label>
         {form.isFlashSale && (
           <label className="flex flex-col gap-1 text-sm text-slate-600">
             <span className="text-xs text-slate-500">
-              Flash sale opens at (auto-opens via scheduled job; leave blank for manual open)
+              秒杀开始时间（通过定时任务自动开始；留空则手动开启）
             </span>
             <Input
               type="datetime-local"
@@ -465,7 +459,7 @@ export default function Admin() {
             loading={saving}
             icon={<Plus className="w-4 h-4" />}
           >
-            {editingId !== null ? 'Update' : 'Create'}
+            {editingId !== null ? '更新' : '创建'}
           </Button>
           {editingId !== null && (
             <Button
@@ -473,92 +467,82 @@ export default function Admin() {
               variant="secondary"
               onClick={resetForm}
             >
-              Cancel edit
+              取消编辑
             </Button>
           )}
         </div>
       </form>
 
       {/* Product table */}
-      {loading && <p className="text-sm text-slate-500">Loading…</p>}
+      {loading && <p className="text-sm text-slate-500">加载中…</p>}
       {!loading && (
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-600">
-              <tr>
-                <th className="text-left px-4 py-2 font-medium">ID</th>
-                <th className="text-left px-4 py-2 font-medium">Name</th>
-                <th className="text-right px-4 py-2 font-medium">Price</th>
-                <th className="text-right px-4 py-2 font-medium">Stock</th>
-                <th className="text-left px-4 py-2 font-medium">Flash</th>
-                <th className="text-left px-4 py-2 font-medium">Sale at</th>
-                <th className="text-right px-4 py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => (
-                <tr key={p.id} className="border-t border-slate-100">
-                  <td className="px-4 py-2 text-slate-500">{p.id}</td>
-                  <td className="px-4 py-2 text-slate-800">{p.name}</td>
-                  <td className="px-4 py-2 text-right text-slate-700">{formatPrice(p.priceInCents)}</td>
-                  <td className="px-4 py-2 text-right text-slate-700">{p.stock}</td>
-                  <td className="px-4 py-2">
-                    {p.isFlashSale ? (
-                      <Badge color="amber">Yes</Badge>
-                    ) : (
-                      <Badge color="slate">No</Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-xs text-slate-600">
-                    {p.flashSaleAt
-                      ? new Date(p.flashSaleAt).toLocaleString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : <span className="text-slate-300">—</span>}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenSale(p.id)}
-                        disabled={saleId === p.id}
-                        loading={saleId === p.id}
-                        title="Open flash sale (load stock into Redis)"
-                        icon={<Zap className="w-4 h-4" />}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => startEdit(p)}
-                        title="Edit"
-                        icon={<Pencil className="w-4 h-4" />}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(p.id)}
-                        title="Delete"
-                        icon={<Trash2 className="w-4 h-4" />}
-                        className="text-red-600 hover:bg-red-50"
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
-                    No products yet. Create one above.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table<Product>
+          rowKey={(p) => String(p.id)}
+          data={rows}
+          empty="暂无商品，请在上方创建。"
+          columns={[
+            { key: 'id', header: 'ID', render: (p) => <span className="text-slate-500">{p.id}</span> },
+            { key: 'name', header: '名称', render: (p) => <span className="text-slate-800">{p.name}</span> },
+            { key: 'priceInCents', header: '价格', className: 'text-right', render: (p) => <span className="text-slate-700">{formatPrice(p.priceInCents)}</span> },
+            { key: 'stock', header: '库存', className: 'text-right', render: (p) => <span className="text-slate-700">{p.stock}</span> },
+            {
+              key: 'isFlashSale',
+              header: '秒杀',
+              render: (p) =>
+                p.isFlashSale ? <Badge color="amber">是</Badge> : <Badge color="slate">否</Badge>,
+            },
+            {
+              key: 'flashSaleAt',
+              header: '开始时间',
+              render: (p) =>
+                p.flashSaleAt ? (
+                  <span className="text-xs text-slate-600">
+                    {new Date(p.flashSaleAt).toLocaleString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                ) : (
+                  <span className="text-slate-300">—</span>
+                ),
+            },
+            {
+              key: 'actions',
+              header: '操作',
+              className: 'text-right',
+              render: (p) => (
+                <div className="flex items-center justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleOpenSale(p.id)}
+                    disabled={saleId === p.id}
+                    loading={saleId === p.id}
+                    title="开启秒杀（加载库存到 Redis）"
+                    icon={<Zap className="w-4 h-4" />}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => startEdit(p)}
+                    title="编辑"
+                    icon={<Pencil className="w-4 h-4" />}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(p.id)}
+                    title="删除"
+                    icon={<Trash2 className="w-4 h-4" />}
+                    className="text-red-600 hover:bg-red-50"
+                  />
+                </div>
+              ),
+            },
+          ]}
+        />
       )}
         </>
       )}
@@ -570,65 +554,65 @@ export default function Admin() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-orange-600" />
-              <h2 className="text-sm font-medium text-slate-700">Refund requests</h2>
+              <h2 className="text-sm font-medium text-slate-700">退款申请</h2>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => { void loadRefunds(); void loadOrders() }}
                 className="ml-auto"
               >
-                Refresh
+                刷新
               </Button>
             </div>
             {refundsError && <p className="text-sm text-red-600">{refundsError}</p>}
             {refundsLoading ? (
-              <p className="text-sm text-slate-500">Loading refunds…</p>
+              <p className="text-sm text-slate-500">加载退款中…</p>
             ) : refunds.length === 0 ? (
-              <p className="text-sm text-slate-400">No pending refund requests.</p>
+              <p className="text-sm text-slate-400">暂无待处理的退款申请。</p>
             ) : (
-              <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-medium">Order</th>
-                      <th className="text-left px-4 py-2 font-medium">Customer</th>
-                      <th className="text-left px-4 py-2 font-medium">Reason</th>
-                      <th className="text-right px-4 py-2 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {refunds.map((o) => (
-                      <tr key={o.id} className="border-t border-slate-100">
-                        <td className="px-4 py-2 text-slate-500">#{o.id}</td>
-                        <td className="px-4 py-2 text-slate-800">{o.customerName}</td>
-                        <td className="px-4 py-2 text-slate-600 max-w-xs truncate">
-                          {o.refundReason || '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleApproveRefund(o.id)}
-                            disabled={busyOrderId === o.id}
-                            className="text-green-600"
-                          >
-                            {busyOrderId === o.id ? '…' : 'Approve'}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDenyRefund(o.id)}
-                            disabled={busyOrderId === o.id}
-                            className="text-red-600"
-                          >
-                            {busyOrderId === o.id ? '…' : 'Deny'}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table<Order>
+                rowKey={(o) => String(o.id)}
+                data={refunds}
+                empty="暂无待处理的退款申请。"
+                columns={[
+                  { key: 'id', header: '订单', render: (o) => <span className="text-slate-500">#{o.id}</span> },
+                  { key: 'customerName', header: '客户', render: (o) => <span className="text-slate-800">{o.customerName}</span> },
+                  {
+                    key: 'refundReason',
+                    header: '原因',
+                    render: (o) => (
+                      <span className="text-slate-600 max-w-xs truncate">{o.refundReason || '—'}</span>
+                    ),
+                  },
+                  {
+                    key: 'actions',
+                    header: '操作',
+                    className: 'text-right',
+                    render: (o) => (
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleApproveRefund(o.id)}
+                          disabled={busyOrderId === o.id}
+                          className="text-green-600"
+                        >
+                          {busyOrderId === o.id ? '…' : '批准'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDenyRefund(o.id)}
+                          disabled={busyOrderId === o.id}
+                          className="text-red-600"
+                        >
+                          {busyOrderId === o.id ? '…' : '拒绝'}
+                        </Button>
+                      </div>
+                    ),
+                  },
+                ]}
+              />
             )}
           </section>
 
@@ -636,9 +620,9 @@ export default function Admin() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <Package className="w-4 h-4 text-brand-600" />
-              <h2 className="text-sm font-medium text-slate-700">All orders</h2>
+              <h2 className="text-sm font-medium text-slate-700">所有订单</h2>
               <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500">
-                Status
+                状态
                 <Select
                   value={statusFilter ?? ''}
                   onChange={(e) =>
@@ -656,90 +640,88 @@ export default function Admin() {
             </div>
             {ordersError && <p className="text-sm text-red-600">{ordersError}</p>}
             {ordersLoading ? (
-              <p className="text-sm text-slate-500">Loading…</p>
+              <p className="text-sm text-slate-500">加载中…</p>
             ) : (
-              <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-medium">Order</th>
-                      <th className="text-left px-4 py-2 font-medium">Customer</th>
-                      <th className="text-right px-4 py-2 font-medium">Total</th>
-                      <th className="text-left px-4 py-2 font-medium">Status</th>
-                      <th className="text-left px-4 py-2 font-medium">Tracking</th>
-                      <th className="text-right px-4 py-2 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map((o) => (
-                      <tr key={o.id} className="border-t border-slate-100">
-                        <td className="px-4 py-2 text-slate-500">#{o.id}</td>
-                        <td className="px-4 py-2 text-slate-800">
-                          {o.customerName}
-                          {o.customerPhone && (
-                            <span className="block text-xs text-slate-400">{o.customerPhone}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2 text-right text-slate-700">
-                          {formatPrice(o.totalInCents)}
-                        </td>
-                        <td className="px-4 py-2">
-                          <StatusBadge status={o.status} />
-                        </td>
-                        <td className="px-4 py-2 text-slate-600 font-mono text-xs">
-                          {o.trackingNumber || '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          {o.status === 'PAID' && (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Input
-                                placeholder="Tracking #"
-                                value={trackingInputs[o.id] ?? ''}
-                                onChange={(e) =>
-                                  setTrackingInputs((prev) => ({ ...prev, [o.id]: e.target.value }))
-                                }
-                                className="w-28 text-xs py-1"
-                              />
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => handleShip(o.id)}
-                                disabled={busyOrderId === o.id}
-                                loading={busyOrderId === o.id}
-                                icon={<Package className="w-3 h-3" />}
-                              >
-                                Ship
-                              </Button>
-                            </div>
-                          )}
-                          {o.status === 'SHIPPED' && (
+              <Table<Order>
+                rowKey={(o) => String(o.id)}
+                data={orders}
+                empty={`暂无订单${statusFilter ? `（状态：${statusFilter}）` : ''}。`}
+                columns={[
+                  { key: 'id', header: '订单', render: (o) => <span className="text-slate-500">#{o.id}</span> },
+                  {
+                    key: 'customerName',
+                    header: '客户',
+                    render: (o) => (
+                      <span className="text-slate-800">
+                        {o.customerName}
+                        {o.customerPhone && (
+                          <span className="block text-xs text-slate-400">{o.customerPhone}</span>
+                        )}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'totalInCents',
+                    header: '总额',
+                    className: 'text-right',
+                    render: (o) => <span className="text-slate-700">{formatPrice(o.totalInCents)}</span>,
+                  },
+                  { key: 'status', header: '状态', render: (o) => <StatusBadge status={o.status} /> },
+                  {
+                    key: 'trackingNumber',
+                    header: '物流单号',
+                    render: (o) => (
+                      <span className="text-slate-600 font-mono text-xs">{o.trackingNumber || '—'}</span>
+                    ),
+                  },
+                  {
+                    key: 'actions',
+                    header: '操作',
+                    className: 'text-right',
+                    render: (o) => (
+                      <>
+                        {o.status === 'PAID' && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Input
+                              placeholder="物流单号"
+                              value={trackingInputs[o.id] ?? ''}
+                              onChange={(e) =>
+                                setTrackingInputs((prev) => ({ ...prev, [o.id]: e.target.value }))
+                              }
+                              className="w-28 text-xs py-1"
+                            />
                             <Button
                               variant="primary"
                               size="sm"
-                              onClick={() => handleDeliver(o.id)}
+                              onClick={() => handleShip(o.id)}
                               disabled={busyOrderId === o.id}
                               loading={busyOrderId === o.id}
-                              icon={<CheckCheck className="w-3 h-3" />}
+                              icon={<Package className="w-3 h-3" />}
                             >
-                              Deliver
+                              发货
                             </Button>
-                          )}
-                          {o.status !== 'PAID' && o.status !== 'SHIPPED' && (
-                            <span className="text-xs text-slate-300">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {orders.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
-                          No orders{statusFilter ? ` with status ${statusFilter}` : ''}.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
+                        )}
+                        {o.status === 'SHIPPED' && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleDeliver(o.id)}
+                            disabled={busyOrderId === o.id}
+                            loading={busyOrderId === o.id}
+                            icon={<CheckCheck className="w-3 h-3" />}
+                          >
+                            送达
+                          </Button>
+                        )}
+                        {o.status !== 'PAID' && o.status !== 'SHIPPED' && (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
+                      </>
+                    ),
+                  },
+                ]}
+              />
             )}
           </section>
         </div>
@@ -751,65 +733,62 @@ export default function Admin() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-brand-600" />
-              <h2 className="text-sm font-medium text-slate-700">Open sessions</h2>
+              <h2 className="text-sm font-medium text-slate-700">开放会话</h2>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => { void loadInbox() }}
                 className="ml-auto"
               >
-                Refresh
+                刷新
               </Button>
             </div>
             {inboxError && <p className="text-sm text-red-600">{inboxError}</p>}
             {inboxLoading ? (
-              <p className="text-sm text-slate-500">Loading…</p>
+              <p className="text-sm text-slate-500">加载中…</p>
             ) : inbox.length === 0 ? (
-              <p className="text-sm text-slate-400">No open chat sessions.</p>
+              <p className="text-sm text-slate-400">暂无开放会话。</p>
             ) : (
-              <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-medium">Session</th>
-                      <th className="text-left px-4 py-2 font-medium">User</th>
-                      <th className="text-left px-4 py-2 font-medium">Status</th>
-                      <th className="text-left px-4 py-2 font-medium">Created</th>
-                      <th className="text-right px-4 py-2 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inbox.map((s) => (
-                      <tr key={s.id} className="border-t border-slate-100">
-                        <td className="px-4 py-2 text-slate-500">#{s.id}</td>
-                        <td className="px-4 py-2 text-slate-800">user #{s.userId}</td>
-                        <td className="px-4 py-2">
-                          <Badge color="green">{s.status}</Badge>
-                        </td>
-                        <td className="px-4 py-2 text-xs text-slate-600">
-                          {s.createTime
-                            ? new Date(s.createTime).toLocaleString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })
-                            : '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedSessionId(s.id)}
-                          >
-                            {selectedSessionId === s.id ? 'Selected' : 'Open'}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table<ChatSessionVO>
+                rowKey={(s) => String(s.id)}
+                data={inbox}
+                empty="暂无开放会话。"
+                columns={[
+                  { key: 'id', header: '会话', render: (s) => <span className="text-slate-500">#{s.id}</span> },
+                  { key: 'userId', header: '用户', render: (s) => <span className="text-slate-800">用户 #{s.userId}</span> },
+                  { key: 'status', header: '状态', render: (s) => <Badge color="green">{s.status}</Badge> },
+                  {
+                    key: 'createTime',
+                    header: '创建时间',
+                    render: (s) => (
+                      <span className="text-xs text-slate-600">
+                        {s.createTime
+                          ? new Date(s.createTime).toLocaleString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '—'}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'actions',
+                    header: '操作',
+                    className: 'text-right',
+                    render: (s) => (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedSessionId(s.id)}
+                      >
+                        {selectedSessionId === s.id ? '已选' : '打开'}
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
             )}
           </section>
 
@@ -855,11 +834,11 @@ function ChatReplyPanel({ sessionId }: { sessionId: number }) {
   return (
     <section className="space-y-3">
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-medium text-slate-700">Session #{sessionId}</h2>
+        <h2 className="text-sm font-medium text-slate-700">会话 #{sessionId}</h2>
         <span className="text-xs text-slate-400">{connected ? '已连接' : '连接中…'}</span>
       </div>
       <div className="h-80 overflow-y-auto rounded border border-slate-200 p-3 bg-slate-50">
-        {historyLoading && <p className="text-sm text-slate-500">Loading history…</p>}
+        {historyLoading && <p className="text-sm text-slate-500">加载历史记录…</p>}
         {messages.map((m: ChatMessageVO) => (
           <div key={m.id} className={`mb-2 ${m.senderType === 'ADMIN' ? 'text-right' : 'text-left'}`}>
             <span
@@ -872,7 +851,7 @@ function ChatReplyPanel({ sessionId }: { sessionId: number }) {
           </div>
         ))}
         {!historyLoading && messages.length === 0 && (
-          <p className="text-sm text-slate-400 text-center">No messages yet.</p>
+          <p className="text-sm text-slate-400 text-center">暂无消息。</p>
         )}
       </div>
       <form onSubmit={submit} className="flex gap-2">
