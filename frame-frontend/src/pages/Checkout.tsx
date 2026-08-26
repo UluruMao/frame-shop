@@ -123,7 +123,7 @@ export default function Checkout() {
         if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
           pollingRef.current = false
           if (timerRef.current) clearInterval(timerRef.current)
-          setError(err instanceof Error ? err.message : 'order resolution timed out')
+          setError(err instanceof Error ? err.message : '订单解析超时')
           setStage('resolved')
         }
       }
@@ -160,7 +160,7 @@ export default function Checkout() {
       setOrderId(res.orderId)
       setStage('queued')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'checkout failed')
+      setError(err instanceof Error ? err.message : '结算失败')
     }
   }
 
@@ -174,7 +174,7 @@ export default function Checkout() {
       setStage('paid')
       clear()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'payment failed')
+      setError(err instanceof Error ? err.message : '支付失败')
     } finally {
       setPaying(false)
     }

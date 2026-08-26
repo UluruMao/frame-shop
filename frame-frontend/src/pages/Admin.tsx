@@ -128,7 +128,7 @@ export default function Admin() {
       setRows(res.records)
       setTotal(res.total)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to load products')
+      setError(err instanceof Error ? err.message : '加载商品失败')
     } finally {
       setLoading(false)
     }
@@ -194,19 +194,19 @@ export default function Admin() {
       resetForm()
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'save failed')
+      setError(err instanceof Error ? err.message : '保存失败')
     } finally {
       setSaving(false)
     }
   }
 
   async function handleDelete(id: number) {
-    if (!confirm(`Delete product #${id}?`)) return
+    if (!confirm(`确认删除商品 #${id}？`)) return
     try {
       await deleteProduct(id)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'delete failed')
+      setError(err instanceof Error ? err.message : '删除失败')
     }
   }
 
@@ -217,7 +217,7 @@ export default function Admin() {
       await openFlashSale(id)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to open sale')
+      setError(err instanceof Error ? err.message : '开启秒杀失败')
     } finally {
       setSaleId(null)
     }
@@ -233,7 +233,7 @@ export default function Admin() {
       setOrders(res.records)
       setOrdersTotal(res.total)
     } catch (err) {
-      setOrdersError(err instanceof Error ? err.message : 'failed to load orders')
+      setOrdersError(err instanceof Error ? err.message : '加载订单失败')
     } finally {
       setOrdersLoading(false)
     }
@@ -248,7 +248,7 @@ export default function Admin() {
   async function handleShip(id: number) {
     const tracking = (trackingInputs[id] ?? '').trim()
     if (!tracking) {
-      setOrdersError('Enter a tracking number before shipping')
+      setOrdersError('请先输入运单号再发货')
       return
     }
     setBusyOrderId(id)
@@ -258,7 +258,7 @@ export default function Admin() {
       setTrackingInputs((prev) => ({ ...prev, [id]: '' }))
       await Promise.all([loadOrders(), loadRefunds()])
     } catch (err) {
-      setOrdersError(err instanceof Error ? err.message : 'ship failed')
+      setOrdersError(err instanceof Error ? err.message : '发货失败')
     } finally {
       setBusyOrderId(null)
     }
@@ -271,7 +271,7 @@ export default function Admin() {
       await adminDeliver(id)
       await loadOrders()
     } catch (err) {
-      setOrdersError(err instanceof Error ? err.message : 'deliver failed')
+      setOrdersError(err instanceof Error ? err.message : '送达失败')
     } finally {
       setBusyOrderId(null)
     }
@@ -286,7 +286,7 @@ export default function Admin() {
       const res = await adminRefundRequests()
       setRefunds(res.records)
     } catch (err) {
-      setRefundsError(err instanceof Error ? err.message : 'failed to load refunds')
+      setRefundsError(err instanceof Error ? err.message : '加载退款失败')
     } finally {
       setRefundsLoading(false)
     }
@@ -307,7 +307,7 @@ export default function Admin() {
       const sessions = await adminInbox()
       setInbox(sessions)
     } catch (err) {
-      setInboxError(err instanceof Error ? err.message : 'failed to load inbox')
+      setInboxError(err instanceof Error ? err.message : '加载会话失败')
     } finally {
       setInboxLoading(false)
     }
@@ -326,7 +326,7 @@ export default function Admin() {
       await adminApproveRefund(orderId)
       await Promise.all([loadRefunds(), loadOrders()])
     } catch (err) {
-      setRefundsError(err instanceof Error ? err.message : 'approve refund failed')
+      setRefundsError(err instanceof Error ? err.message : '批准退款失败')
     } finally {
       setBusyOrderId(null)
     }
@@ -339,7 +339,7 @@ export default function Admin() {
       await adminDenyRefund(orderId)
       await Promise.all([loadRefunds(), loadOrders()])
     } catch (err) {
-      setRefundsError(err instanceof Error ? err.message : 'deny refund failed')
+      setRefundsError(err instanceof Error ? err.message : '拒绝退款失败')
     } finally {
       setBusyOrderId(null)
     }

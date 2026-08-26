@@ -34,7 +34,7 @@ export default function ReviewModal({ orderId, productId, existing, onClose, onS
       const urls = await Promise.all(picked.map((f) => uploadReviewImage(f)))
       setImageUrls((prev) => [...prev, ...urls])
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'image upload failed')
+      setErr(e instanceof Error ? e.message : '图片上传失败')
     }
   }
 
@@ -50,7 +50,7 @@ export default function ReviewModal({ orderId, productId, existing, onClose, onS
       }
       onSuccess()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'submit failed')
+      setErr(e instanceof Error ? e.message : '提交失败')
     } finally {
       setBusy(false)
     }

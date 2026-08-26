@@ -16,11 +16,15 @@ import Admin from '@/pages/Admin'
 import Profile from '@/pages/Profile'
 import Chat from '@/pages/Chat'
 
-/** Index route: guests (no token) land on Products; logged-in users land on Dashboard. */
+/** Index route: guests (no token) and logged-in non-admins land on Products;
+ *  logged-in admins land on the Dashboard (an admin-only page). */
 function IndexRoute() {
   const token = useAuthStore((s) => s.token)
-  // Guests (no token) → Products; logged-in → Dashboard (admin/user both land on Dashboard).
-  return token ? <Navigate to="/dashboard" replace /> : <Navigate to="/products" replace />
+  const role = useAuthStore((s) => s.user?.role)
+  // Guests (no token) → Products; logged-in non-admins → Products (Dashboard
+  // is @PreAuthorize("hasRole('ADMIN')") and would 403 them); admins → Dashboard.
+  const dest = token && role === 'ADMIN' ? '/dashboard' : '/products'
+  return <Navigate to={dest} replace />
 }
 
 const routes: RouteObject[] = [

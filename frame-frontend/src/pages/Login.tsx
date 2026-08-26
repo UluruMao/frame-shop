@@ -17,7 +17,10 @@ export default function Login() {
   const location = useLocation()
   const setAuth = useAuthStore((s) => s.setAuth)
 
-  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/dashboard'
+  // Redirect to the saved origin if present, else fall back to "/" — IndexRoute
+  // then routes admins to /dashboard and non-admins to /products (so a USER who
+  // logs in never lands on the admin-only Dashboard and triggers a 403).
+  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/'
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()

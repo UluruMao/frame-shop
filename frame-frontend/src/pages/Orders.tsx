@@ -66,7 +66,7 @@ export default function Orders() {
         setTotal(res.total)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to load orders')
+      setError(err instanceof Error ? err.message : '加载订单失败')
     } finally {
       setLoading(false)
     }
@@ -83,7 +83,7 @@ export default function Orders() {
       await payOrder(id)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'pay failed')
+      setError(err instanceof Error ? err.message : '支付失败')
     } finally {
       setBusyId(null)
     }
@@ -95,7 +95,7 @@ export default function Orders() {
       await cancelOrder(id)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'cancel failed')
+      setError(err instanceof Error ? err.message : '取消失败')
     } finally {
       setBusyId(null)
     }
@@ -107,7 +107,7 @@ export default function Orders() {
       await cancelPaid(id)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'refund failed')
+      setError(err instanceof Error ? err.message : '退款失败')
     } finally {
       setBusyId(null)
     }
@@ -119,7 +119,7 @@ export default function Orders() {
       await confirmReceipt(id)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'confirm failed')
+      setError(err instanceof Error ? err.message : '确认收货失败')
     } finally {
       setBusyId(null)
     }
@@ -143,7 +143,7 @@ export default function Orders() {
       closeRefundModal()
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'refund request failed')
+      setError(err instanceof Error ? err.message : '申请退款失败')
     } finally {
       setBusyId(null)
     }
