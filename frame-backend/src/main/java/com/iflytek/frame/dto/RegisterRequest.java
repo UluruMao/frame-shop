@@ -1,5 +1,7 @@
 package com.iflytek.frame.dto;
 
+import com.iflytek.frame.validation.Phone;
+import com.iflytek.frame.validation.SmsCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -19,9 +21,11 @@ public class RegisterRequest {
     private String password;  // strength validated in the service (≥8, ≥2 categories)
 
     @NotBlank(message = "phone must not be blank")
+    @Phone
     private String phone;
 
     @NotBlank(message = "verification code must not be blank")
+    @SmsCode
     private String code;
 
     @AssertTrue(message = "must agree to terms")

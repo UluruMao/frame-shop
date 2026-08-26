@@ -50,7 +50,7 @@ public class ProfileController {
 
     @Operation(summary = "Phone rebind — verify old phone/password (UC017)")
     @PostMapping("/phone/rebind/verify-old")
-    public Result<Void> rebindVerifyOld(@RequestBody RebindVerifyOldRequest req) {
+    public Result<Void> rebindVerifyOld(@Valid @RequestBody RebindVerifyOldRequest req) {
         // oldPhoneUsable is inferred by which field is present here, but the frontend knows; pass both branches.
         boolean usable = req.getCode() != null && !req.getCode().isBlank();
         rebindService.verifyOld(SecurityUtils.currentUserId(), SecurityUtils.currentUsername(),
