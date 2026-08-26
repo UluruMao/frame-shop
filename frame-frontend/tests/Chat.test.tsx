@@ -24,4 +24,11 @@ describe('Chat page', () => {
     fireEvent.click(screen.getByText('发送'))
     expect(mockSend).toHaveBeenCalledWith('hi', null)
   })
+
+  it('renders Chinese labels (regression guard)', async () => {
+    render(<Chat />)
+    expect(await screen.findByText('联系客服')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('输入消息…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument()
+  })
 })

@@ -44,4 +44,18 @@ describe('Coins', () => {
     await waitFor(() => expect(screen.getByText('每日登录')).toBeInTheDocument())
     expect(screen.getByText('+100')).toBeInTheDocument()
   })
+
+  it('renders Chinese labels (regression guard)', async () => {
+    ;(getCoinBalance as any).mockResolvedValue({ balance: 300, claimedToday: true, expiringSoon: 0 })
+    ;(getCoinHistory as any).mockResolvedValue({ total: 0, current: 1, size: 20, records: [] })
+    render(
+      <MemoryRouter>
+        <Coins />
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getByText('300')).toBeInTheDocument())
+    // Page heading + balance + history-section heading must stay Chinese.
+    expect(screen.getByText('我的金币')).toBeInTheDocument()
+    expect(screen.getByText('金币明细')).toBeInTheDocument()
+  })
 })

@@ -7,6 +7,7 @@ import type { UserProfile } from '@/api/types'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Card from '@/components/ui/Card'
+import PageHeader from '@/components/ui/PageHeader'
 
 /**
  * Profile page (UC016 + UC017 + password change).
@@ -44,7 +45,7 @@ export default function Profile() {
         setNickname(p.nickname ?? '')
         setSignature(p.signature ?? '')
         setAvatarUrl(p.avatarUrl)
-      } catch (err) { setError(err instanceof Error ? err.message : 'failed to load profile') }
+      } catch (err) { setError(err instanceof Error ? err.message : '加载资料失败') }
     })()
   }, [])
 
@@ -53,8 +54,8 @@ export default function Profile() {
     setError(null); setMsg(null); setLoading(true)
     try {
       await updateProfile(nickname, signature)
-      setMsg('Profile updated')
-    } catch (err) { setError(err instanceof Error ? err.message : 'update failed') }
+      setMsg('资料已更新')
+    } catch (err) { setError(err instanceof Error ? err.message : '更新失败') }
     finally { setLoading(false) }
   }
 
@@ -65,8 +66,8 @@ export default function Profile() {
     try {
       const url = await uploadAvatar(file)
       setAvatarUrl(url)
-      setMsg('Avatar updated')
-    } catch (err) { setError(err instanceof Error ? err.message : 'avatar upload failed') }
+      setMsg('头像已更新')
+    } catch (err) { setError(err instanceof Error ? err.message : '头像上传失败') }
   }
 
   async function handleRebindInit() {
@@ -74,7 +75,7 @@ export default function Profile() {
     try {
       await rebindInit(true)
       setRebindStep('verify-old')
-    } catch (err) { setError(err instanceof Error ? err.message : 'rebind init failed') }
+    } catch (err) { setError(err instanceof Error ? err.message : '换绑初始化失败') }
     finally { setLoading(false) }
   }
 
@@ -84,7 +85,7 @@ export default function Profile() {
     try {
       await rebindVerifyOld(oldCode || null, oldPassword || null)
       setRebindStep('confirm')
-    } catch (err) { setError(err instanceof Error ? err.message : 'verify-old failed') }
+    } catch (err) { setError(err instanceof Error ? err.message : '验证原手机号失败') }
     finally { setLoading(false) }
   }
 
@@ -93,13 +94,13 @@ export default function Profile() {
     setError(null); setMsg(null); setLoading(true)
     try {
       await rebindConfirm(newPhone, newCode)
-      setMsg('Phone rebound')
+      setMsg('手机号已换绑')
       setRebindStep('idle')
       setOldCode(''); setOldPassword(''); setNewPhone(''); setNewCode('')
       // refresh the phone shown
       const p = await fetchMe()
       setProfile(p)
-    } catch (err) { setError(err instanceof Error ? err.message : 'confirm failed') }
+    } catch (err) { setError(err instanceof Error ? err.message : '确认换绑失败') }
     finally { setLoading(false) }
   }
 
@@ -108,22 +109,19 @@ export default function Profile() {
     setError(null); setMsg(null); setLoading(true)
     try {
       await changePassword(oldPw, newPw)
-      setMsg('Password changed')
+      setMsg('密码已修改')
       setOldPw(''); setNewPw('')
-    } catch (err) { setError(err instanceof Error ? err.message : 'change password failed') }
+    } catch (err) { setError(err instanceof Error ? err.message : '修改密码失败') }
     finally { setLoading(false) }
   }
 
   if (!profile) {
-    return <div className="text-slate-500 text-sm">Loading…</div>
+    return <div className="text-slate-500 text-sm">加载中…</div>
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <UserIcon className="w-5 h-5 text-brand-600" />
-        <h1 className="text-lg font-semibold text-slate-800">Profile</h1>
-      </div>
+      <PageHeader icon={<UserIcon className="w-5 h-5 text-brand-600" />} title="个人资料" />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       {msg && <p className="text-sm text-green-600">{msg}</p>}
@@ -134,28 +132,28 @@ export default function Profile() {
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center">
               {avatarUrl ? (
-                <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
               ) : (
                 <UserIcon className="w-8 h-8 text-slate-400" />
               )}
             </div>
             <label className="flex items-center gap-1.5 text-sm text-brand-600 hover:underline cursor-pointer">
               <Upload className="w-4 h-4" />
-              Upload avatar
+              上传头像
               <input type="file" accept="image/*" onChange={(e) => void handleAvatar(e)} className="hidden" />
             </label>
           </div>
           <div className="space-y-1.5">
-            <label className="block text-sm text-slate-600">Nickname</label>
+            <label className="block text-sm text-slate-600">昵称</label>
             <Input value={nickname} onChange={(e) => setNickname(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <label className="block text-sm text-slate-600">Signature</label>
+            <label className="block text-sm text-slate-600">个性签名</label>
             <Input value={signature} onChange={(e) => setSignature(e.target.value)} />
           </div>
-          <div className="text-xs text-slate-500">Username: {profile.username} · Phone: {profile.phone ?? user?.phone ?? '—'} · Role: {profile.role}</div>
+          <div className="text-xs text-slate-500">用户名：{profile.username} · 手机号：{profile.phone ?? user?.phone ?? '—'} · 角色：{profile.role}</div>
           <Button type="submit" loading={loading}>
-            {loading ? 'Saving…' : 'Save profile'}
+            {loading ? '保存中…' : '保存资料'}
           </Button>
         </Card>
       </form>
@@ -164,30 +162,30 @@ export default function Profile() {
       <Card className="p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Phone className="w-4 h-4 text-brand-600" />
-          <h2 className="text-sm font-semibold text-slate-700">Phone rebind</h2>
+          <h2 className="text-sm font-semibold text-slate-700">换绑手机号</h2>
         </div>
         {rebindStep === 'idle' && (
           <Button type="button" variant="secondary" onClick={() => void handleRebindInit()} loading={loading}>
-            Start rebind
+            开始换绑
           </Button>
         )}
         {rebindStep === 'verify-old' && (
           <form onSubmit={handleVerifyOld} className="space-y-3">
-            <p className="text-xs text-slate-500">Verify old phone — enter the SMS code OR your password.</p>
-            <Input placeholder="Old phone code (or leave blank)" value={oldCode} onChange={(e) => setOldCode(e.target.value)} />
-            <Input type="password" placeholder="Password (or leave blank)" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} />
+            <p className="text-xs text-slate-500">验证原手机号 — 输入短信验证码或登录密码。</p>
+            <Input placeholder="原手机验证码（可不填）" value={oldCode} onChange={(e) => setOldCode(e.target.value)} />
+            <Input type="password" placeholder="密码（可不填）" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} />
             <Button type="submit" loading={loading}>
-              {loading ? 'Verifying…' : 'Verify old'}
+              {loading ? '验证中…' : '验证原手机号'}
             </Button>
           </form>
         )}
         {rebindStep === 'confirm' && (
           <form onSubmit={handleConfirm} className="space-y-3">
-            <p className="text-xs text-slate-500">Enter new phone + the code sent to it.</p>
-            <Input placeholder="New phone (11 digits)" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} required pattern="\d{11}" />
-            <Input placeholder="New phone code" value={newCode} onChange={(e) => setNewCode(e.target.value)} required />
+            <p className="text-xs text-slate-500">输入新手机号及收到的验证码。</p>
+            <Input placeholder="新手机号（11位）" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} required pattern="\d{11}" />
+            <Input placeholder="新手机验证码" value={newCode} onChange={(e) => setNewCode(e.target.value)} required />
             <Button type="submit" loading={loading}>
-              {loading ? 'Confirming…' : 'Confirm rebind'}
+              {loading ? '确认中…' : '确认换绑'}
             </Button>
           </form>
         )}
@@ -197,13 +195,13 @@ export default function Profile() {
       <Card className="p-5 space-y-4">
         <div className="flex items-center gap-2">
           <KeyRound className="w-4 h-4 text-brand-600" />
-          <h2 className="text-sm font-semibold text-slate-700">Change password</h2>
+          <h2 className="text-sm font-semibold text-slate-700">修改密码</h2>
         </div>
         <form onSubmit={handleChangePassword} className="space-y-3">
-          <Input type="password" placeholder="Old password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} required />
-          <Input type="password" placeholder="New password (≥8)" value={newPw} onChange={(e) => setNewPw(e.target.value)} required minLength={8} />
+          <Input type="password" placeholder="原密码" value={oldPw} onChange={(e) => setOldPw(e.target.value)} required />
+          <Input type="password" placeholder="新密码（≥8位）" value={newPw} onChange={(e) => setNewPw(e.target.value)} required minLength={8} />
           <Button type="submit" loading={loading}>
-            {loading ? 'Changing…' : 'Change password'}
+            {loading ? '修改中…' : '修改密码'}
           </Button>
         </form>
       </Card>
