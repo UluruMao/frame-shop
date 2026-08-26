@@ -26,6 +26,7 @@ export default function ProductDetailPage() {
   const { add } = useCart()
   const [detail, setDetail] = useState<ProductDetail | null>(null)
   const [liveStock, setLiveStock] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
   const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
@@ -44,6 +45,26 @@ export default function ProductDetailPage() {
         }
       })
   }, [id])
+
+  // Ticking countdown + auto-flip upcoming→live. Without this, the displayed
+  // countdown is frozen and the page never transitions to live stock polling
+  // without a manual refresh.
+  useEffect(() => {
+    if (!detail?.isFlashSale || !detail?.flashSaleAt) return
+    const flashStart = new Date(detail.flashSaleAt).getTime()
+    if (flashStart <= Date.now()) return // already live; the stock poll handles it
+    const t = setInterval(() => {
+      setNow(Date.now())
+      if (Date.now() >= flashStart) {
+        // Sale just went live — re-fetch so isFlashUpcoming flips to isFlashLive
+        // and the stock-poll effect (below) starts.
+        getProductDetail(Number(id))
+          .then((d) => setDetail(d))
+          .catch(() => {})
+      }
+    }, 1000)
+    return () => clearInterval(t)
+  }, [detail, id])
 
   // Flash-sale live-stock polling (moved from the old FlashSaleCard).
   useEffect(() => {
@@ -64,7 +85,7 @@ export default function ProductDetailPage() {
   const flashStart = detail.flashSaleAt ? new Date(detail.flashSaleAt).getTime() : 0
   const isFlashLive = detail.isFlashSale && flashStart > 0 && flashStart <= Date.now()
   const isFlashUpcoming = detail.isFlashSale && flashStart > Date.now()
-  const [hh, mm, ss] = fmtCountdown(flashStart - Date.now()).split(':')
+  const [hh, mm, ss] = fmtCountdown(flashStart - now).split(':')
   const stockShown = isFlashLive ? (liveStock ?? detail.stock) : detail.stock
 
   const onAddToCart = () => {

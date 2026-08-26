@@ -89,6 +89,22 @@ describe('ProductDetailPage (UC000 detail)', () => {
     expect(screen.getByText('login page')).toBeInTheDocument()
   })
 
+  it('ticks the flash-sale countdown down each second', async () => {
+    // shouldAdvanceTime lets the initial getProductDetail promise resolve, but the
+    // countdown only changes after 1s if a setInterval re-renders the component
+    // (without the fix there is no interval, so the displayed text is frozen).
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const flashSaleAt = new Date(Date.now() + 3600_000).toISOString()
+    ;(getProductDetail as any).mockResolvedValue(detail({ isFlashSale: true, flashSaleAt }))
+    renderDetail()
+    await waitFor(() => expect(screen.getByText(/秒杀即将开始/)).toBeInTheDocument())
+    const before = screen.getByText(/秒杀即将开始/).textContent
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    const after = screen.getByText(/秒杀即将开始/).textContent
+    expect(before).not.toEqual(after)
+    vi.useRealTimers()
+  })
+
   it('renders 商品不存在 when the product is not found', async () => {
     // The axios interceptor (src/api/request.ts) rejects with a bare `new Error(message)`
     // (no `.response` property) — exercise the REAL interceptor shape so this test
