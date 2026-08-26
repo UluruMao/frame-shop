@@ -8,6 +8,7 @@ import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import Card from '@/components/ui/Card'
 import EmptyState from '@/components/ui/EmptyState'
+import Pagination from '@/components/ui/Pagination'
 import Spinner from '@/components/ui/Spinner'
 import { formatPrice } from '@/lib/format'
 
@@ -43,7 +44,7 @@ export default function Products() {
 
   return (
     <div className="mx-auto max-w-6xl p-4">
-      <h1 className="mb-4 text-2xl font-bold">商品列表 ({total})</h1>
+      <h1 className="mb-4 text-2xl font-bold">商品列表</h1>
       <div className="mb-4 flex flex-wrap gap-2">
         <Input
           className="w-auto"
@@ -92,12 +93,12 @@ export default function Products() {
         </div>
       )}
 
-      {total > (query.size ?? 12) && (
-        <div className="mt-4 flex gap-2">
-          <button disabled={(query.current ?? 1) <= 1} onClick={() => setQuery((q) => ({ ...q, current: (q.current ?? 1) - 1 }))} className="border px-3 py-1 rounded">上一页</button>
-          <button onClick={() => setQuery((q) => ({ ...q, current: (q.current ?? 1) + 1 }))} className="border px-3 py-1 rounded">下一页</button>
-        </div>
-      )}
+      <Pagination
+        current={query.current ?? 1}
+        size={query.size ?? 12}
+        total={total}
+        onChange={(page) => setQuery((q) => ({ ...q, current: page }))}
+      />
     </div>
   )
 }

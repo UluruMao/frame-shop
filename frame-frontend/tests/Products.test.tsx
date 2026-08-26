@@ -98,4 +98,17 @@ describe('Products — catalog (UC000)', () => {
     renderProducts()
     await waitFor(() => expect(screen.getByText('暂无数据')).toBeInTheDocument())
   })
+
+  it('renders the Pagination kit (下一页) instead of raw buttons when total > size', async () => {
+    // Multi-page mock: 20 records, size 12 → 2 pages, so the kit renders.
+    ;(pageProducts as any).mockResolvedValue({
+      total: 20,
+      current: 1,
+      size: 12,
+      records: [product({ id: 1 }), product({ id: 2 })],
+    })
+    renderProducts()
+    await waitFor(() => expect(screen.getByText(/共 2 页/)).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '下一页' })).toBeInTheDocument()
+  })
 })
