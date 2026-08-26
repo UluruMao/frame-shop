@@ -88,4 +88,15 @@ public interface OrderMapper extends BaseMapper<Order> {
                              @Param("from") OrderStatus from,
                              @Param("to") OrderStatus to,
                              @Param("paidAt") LocalDateTime paidAt);
+
+    /**
+     * Atomic CAS flip DELIVERED→COMPLETED recording the completed timestamp.
+     * Used by the guest's {@code confirmReceipt} (the guest picked up the order
+     * at the depot). Sets {@code completed_at} in the same atomic transition as
+     * the status flip — no race window, no separate {@code updateById}.
+     */
+    int updateStatusAndCompleted(@Param("id") Long id,
+                                  @Param("from") OrderStatus from,
+                                  @Param("to") OrderStatus to,
+                                  @Param("completedAt") LocalDateTime completedAt);
 }

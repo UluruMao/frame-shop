@@ -43,6 +43,11 @@
         where id = #{id} and status = #{from}
     </update>
 
+    <update id="updateStatusAndCompleted">
+        update orders set status = #{to}, completed_at = #{completedAt}, update_time = now()
+        where id = #{id} and status = #{from}
+    </update>
+
     <select id="selectUnreviewedOrders" resultType="com.iflytek.frame.entity.Order">
         select o.* from orders o
         where o.user_id = #{userId}

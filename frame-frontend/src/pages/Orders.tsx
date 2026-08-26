@@ -199,7 +199,8 @@ export default function Orders() {
           { key: 'all', label: '全部', content: null },
           { key: 'PENDING', label: '未付款', content: null },
           { key: 'PAID', label: '未发货', content: null },
-          { key: 'SHIPPED', label: '未签收', content: null },
+          { key: 'SHIPPED', label: '运送中', content: null },
+          { key: 'DELIVERED', label: '待签收', content: null },
           { key: 'COMPLETED', label: '已完成', content: null },
           { key: 'unreviewed', label: '未评价', content: null },
         ]}
@@ -296,6 +297,16 @@ export default function Orders() {
                     </Button>
                   )}
                   {o.status === 'SHIPPED' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openRefundModal(o.id)}
+                      disabled={busyId === o.id}
+                    >
+                      申请退款
+                    </Button>
+                  )}
+                  {o.status === 'DELIVERED' && (
                     <>
                       <Button
                         variant="ghost"
@@ -318,6 +329,7 @@ export default function Orders() {
                   {o.status !== 'PENDING' &&
                     o.status !== 'PAID' &&
                     o.status !== 'SHIPPED' &&
+                    o.status !== 'DELIVERED' &&
                     o.status !== 'REFUND_PENDING' && <span className="text-xs text-slate-300">—</span>}
                 </div>
               ),

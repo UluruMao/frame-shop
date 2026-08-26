@@ -144,8 +144,11 @@ public class OrderServiceImpl implements OrderService {
     public void confirmReceipt(Long id, Long userId) {
         Long realPk = resolveOrderId(id);
         Order o = requireOwnedOrder(realPk, userId);
-        // Atomic CAS flip SHIPPED→DELIVERED with delivered_at in one update (no race window).
-        int rows = orderMapper.updateStatusAndDelivered(realPk, OrderStatus.SHIPPED, OrderStatus.DELIVERED,
+        // Two-step delivery: admin 送达 (SHIPPED→DELIVERED, reached the pickup depot) is
+        // distinct from the guest confirming pickup. The guest's 确认收货 flips
+        // DELIVERED→COMPLETED (actually picked up) + completed_at in one atomic CAS.
+        // The 7-day auto-complete scheduler is a fallback for guests who never click.
+        int rows = orderMapper.updateStatusAndCompleted(realPk, OrderStatus.DELIVERED, OrderStatus.COMPLETED,
                 LocalDateTime.now());
         if (rows == 0) {
             throw new BusinessException(ResultCode.CONFLICT, "order cannot be confirmed in current state");
@@ -201,15 +204,16 @@ public class OrderServiceImpl implements OrderService {
         if (o == null) {
             return;
         }
-        int rows = orderMapper.updateStatusIf(id, OrderStatus.DELIVERED, OrderStatus.COMPLETED);
+        // 7-day fallback for guests who never clicked 确认收货: CAS DELIVERED→COMPLETED
+        // + completed_at, same atomic transition the guest's confirmReceipt uses.
+        // Whichever fires first wins; the second is a no-op (CAS returns 0).
+        int rows = orderMapper.updateStatusAndCompleted(id, OrderStatus.DELIVERED, OrderStatus.COMPLETED,
+                LocalDateTime.now());
         if (rows == 0) {
             // Not DELIVERED any more (already completed, or state regressed) — no-op.
             log.debug("completeOrder {} no-op: not DELIVERED (current={})", id, o.getStatus());
             return;
         }
-        o.setStatus(OrderStatus.COMPLETED);
-        o.setCompletedAt(LocalDateTime.now());
-        orderMapper.updateById(o);
     }
 
     @Override

@@ -312,35 +312,35 @@ class OrderServiceImplTest {
                 .hasMessageContaining("cannot request refund");
     }
 
-    // ===== confirmReceipt: SHIPPED → DELIVERED =====
+    // ===== confirmReceipt: DELIVERED → COMPLETED (guest picked up at the depot) =====
 
     @Test
-    void confirmReceipt_shippedToDelivered() {
+    void confirmReceipt_deliveredToCompleted() {
         long realPk = 13L;
         long userId = 7L;
         Order o = new Order();
         o.setId(realPk);
         o.setUserId(userId);
-        o.setStatus(OrderStatus.SHIPPED);
+        o.setStatus(OrderStatus.DELIVERED); // at the depot, awaiting pickup
         when(orderMapper.selectById(realPk)).thenReturn(o);
-        when(orderMapper.updateStatusAndDelivered(anyLong(), any(), any(), any())).thenReturn(1);
+        when(orderMapper.updateStatusAndCompleted(anyLong(), any(), any(), any())).thenReturn(1);
 
         orderService.confirmReceipt(realPk, userId);
 
-        verify(orderMapper).updateStatusAndDelivered(eq(realPk), eq(OrderStatus.SHIPPED),
-                eq(OrderStatus.DELIVERED), any());
+        verify(orderMapper).updateStatusAndCompleted(eq(realPk), eq(OrderStatus.DELIVERED),
+                eq(OrderStatus.COMPLETED), any());
     }
 
     @Test
-    void confirmReceipt_notShipped_throwsConflict() {
+    void confirmReceipt_notDelivered_throwsConflict() {
         long realPk = 13L;
         long userId = 7L;
         Order o = new Order();
         o.setId(realPk);
         o.setUserId(userId);
-        o.setStatus(OrderStatus.PENDING); // can't confirm an unshipped order
+        o.setStatus(OrderStatus.SHIPPED); // still in transit — can't confirm receipt yet
         when(orderMapper.selectById(realPk)).thenReturn(o);
-        when(orderMapper.updateStatusAndDelivered(anyLong(), any(), any(), any())).thenReturn(0);
+        when(orderMapper.updateStatusAndCompleted(anyLong(), any(), any(), any())).thenReturn(0);
 
         assertThatThrownBy(() -> orderService.confirmReceipt(realPk, userId))
                 .isInstanceOf(BusinessException.class)
@@ -421,11 +421,12 @@ class OrderServiceImplTest {
         o.setId(realPk);
         o.setStatus(OrderStatus.DELIVERED);
         when(orderMapper.selectById(realPk)).thenReturn(o);
-        when(orderMapper.updateStatusIf(realPk, OrderStatus.DELIVERED, OrderStatus.COMPLETED)).thenReturn(1);
+        when(orderMapper.updateStatusAndCompleted(eq(realPk), eq(OrderStatus.DELIVERED), eq(OrderStatus.COMPLETED), any())).thenReturn(1);
 
         orderService.completeOrder(realPk);
 
-        verify(orderMapper).updateById(any(Order.class)); // sets completed_at
+        // completed_at is set in the same atomic CAS update — no separate updateById.
+        verify(orderMapper, never()).updateById(any(Order.class));
     }
 
     @Test
@@ -435,7 +436,7 @@ class OrderServiceImplTest {
         o.setId(realPk);
         o.setStatus(OrderStatus.PENDING);
         when(orderMapper.selectById(realPk)).thenReturn(o);
-        when(orderMapper.updateStatusIf(realPk, OrderStatus.DELIVERED, OrderStatus.COMPLETED)).thenReturn(0);
+        when(orderMapper.updateStatusAndCompleted(eq(realPk), eq(OrderStatus.DELIVERED), eq(OrderStatus.COMPLETED), any())).thenReturn(0);
 
         orderService.completeOrder(realPk);
 

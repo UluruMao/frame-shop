@@ -9,7 +9,7 @@ const CASES: Array<[OrderStatus, string, string]> = [
   ['PENDING', '待付款', 'bg-amber-100'],
   ['PAID', '已付款', 'bg-blue-100'],
   ['SHIPPED', '已发货', 'bg-indigo-100'],
-  ['DELIVERED', '已签收', 'bg-green-100'],
+  ['DELIVERED', '已送达', 'bg-green-100'],
   ['COMPLETED', '已完成', 'bg-slate-100'],
   ['REFUND_PENDING', '退款处理中', 'bg-orange-100'],
   ['REFUNDED', '已退款', 'bg-red-100'],

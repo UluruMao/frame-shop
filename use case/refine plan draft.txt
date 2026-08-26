@@ -1,0 +1,57 @@
+When logged in as admin, 
+current: we can see 
+Dashboard
+Products
+Checkout
+Orders
+Chat
+Profile
+Admin
+But they are not well enough.
+diff plan (keep the existing features unless I ask to change):
+Dashboard
+	Show total mass revenue, total sales numbers, refund rate, rating values. filter data on time basis, eg. Last day, Last week, Last month, Last season, Last years, Last 3 years and so on. Or select a time range eg. 2026/01/01 to 2026/08/08.
+	allow admin to see bar chart(x: products, y: sale numbers), line chart (for trend analysis, product sales number chart, total revenue chart) and pie chart (for percentage analysis)
+	Becuase admin may add, delete, modify the product, how many elements will be in the charts, how to handle the charts, that's a problem.
+Products
+	Don't show this menu, this is for guests.
+Checkout
+	Don't show this menu, this is for guests.
+Orders
+	Don't show this menu, this is for guests.
+Chat
+	Don't show this menu, this is for guests.
+Profile
+	Don't show this menu, this is for guests.
+Admin
+	allow admin manage products, order and chats
+		product:
+			Flash item allow admin to enter how many percentage on sale, ask for a double confirmation.
+		chats: create a ai bot to call LLM api to answer guests question(write strcit prompt to set rule. Constaint the bot's permission and output,  only focus on shopping related issue (product info, order and so on). Follow the minimum rule, if  the bot decides it can't answer the question or the guests ask for human services, invite human join the chat. anti prompt injection. LLM use low effort, fast response) When number and size of chat window enlarges, how to store and manage is also a problem.
+
+When logged in as guest, 
+current: we can see 
+Dashboard
+Products
+Checkout
+Orders
+Chat
+Profile
+
+diff plan:
+When logged in as admin, 
+current: we can see 
+Dashboard
+	Don't show this page, it's for admin.
+Products
+	the time countdown of flash item does not refresh automatically at guest's end. Guest must manully refresh to see, which is not good.
+	Currently product page lacks of image. At admin end, let admin upload a image for the product (url, image file...)
+Checkout
+Orders
+Chat
+	Let user delete chats, when user delete, the chat at admin end is also deleted.
+Profile
+	Let user to delete the account, ask for double confirmation.
+
+Maybe we should divide guests and admin, make them using different login page and frontend page.
+The plan is a large project and some part is hard to implement. And I also have some aspects missing consideration. Activate your brainstorm skills. Think of suggesstions, let me review and choose a plan.

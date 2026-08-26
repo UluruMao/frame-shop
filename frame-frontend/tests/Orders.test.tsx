@@ -90,12 +90,13 @@ beforeEach(() => {
 })
 
 describe('Orders — Chinese labels (kit sweep regression guard)', () => {
-  it('renders Chinese tab labels 全部/未付款/未发货/未签收/已完成/未评价', async () => {
+  it('renders Chinese tab labels 全部/未付款/未发货/运送中/待签收/已完成/未评价', async () => {
     renderOrders()
     await waitFor(() => expect(screen.getByText('全部')).toBeInTheDocument())
     expect(screen.getByText('未付款')).toBeInTheDocument()
     expect(screen.getByText('未发货')).toBeInTheDocument()
-    expect(screen.getByText('未签收')).toBeInTheDocument()
+    expect(screen.getByText('运送中')).toBeInTheDocument()
+    expect(screen.getByText('待签收')).toBeInTheDocument()
     expect(screen.getByText('已完成')).toBeInTheDocument()
     expect(screen.getByText('未评价')).toBeInTheDocument()
   })
@@ -116,12 +117,13 @@ describe('Orders — Chinese labels (kit sweep regression guard)', () => {
 })
 
 describe('Orders — tabs (Phase C)', () => {
-  it('renders the 6 tabs incl. an active (clickable) 未评价 tab', async () => {
+  it('renders the 7 tabs incl. an active (clickable) 未评价 tab', async () => {
     renderOrders()
     await waitFor(() => expect(screen.getByText('全部')).toBeInTheDocument())
     expect(screen.getByText('未付款')).toBeInTheDocument()
     expect(screen.getByText('未发货')).toBeInTheDocument()
-    expect(screen.getByText('未签收')).toBeInTheDocument()
+    expect(screen.getByText('运送中')).toBeInTheDocument()
+    expect(screen.getByText('待签收')).toBeInTheDocument()
     expect(screen.getByText('已完成')).toBeInTheDocument()
     expect(screen.getByText('未评价')).toBeInTheDocument()
     // The 未评价 tab is now active (no longer disabled).
@@ -176,9 +178,20 @@ describe('Orders — per-status row actions', () => {
     await waitFor(() => expect(cancelPaid).toHaveBeenCalledWith(1))
   })
 
-  it('SHIPPED row shows Confirm-receipt + Request-refund buttons', async () => {
+  it('SHIPPED row shows Request-refund only (in transit, not yet at depot)', async () => {
     ;(getMyOrders as any).mockResolvedValue(
       page([order({ status: 'SHIPPED', trackingNumber: 'TRK123' })]),
+    )
+    renderOrders()
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+
+    expect(screen.queryByRole('button', { name: /确认收货/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /申请退款/i })).toBeInTheDocument()
+  })
+
+  it('DELIVERED row shows Confirm-receipt + Request-refund (at depot, awaiting pickup)', async () => {
+    ;(getMyOrders as any).mockResolvedValue(
+      page([order({ status: 'DELIVERED', trackingNumber: 'TRK123' })]),
     )
     renderOrders()
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
@@ -187,8 +200,8 @@ describe('Orders — per-status row actions', () => {
     expect(screen.getByRole('button', { name: /申请退款/i })).toBeInTheDocument()
   })
 
-  it('SHIPPED confirm-receipt calls confirmReceipt', async () => {
-    ;(getMyOrders as any).mockResolvedValue(page([order({ status: 'SHIPPED' })]))
+  it('DELIVERED confirm-receipt calls confirmReceipt', async () => {
+    ;(getMyOrders as any).mockResolvedValue(page([order({ status: 'DELIVERED' })]))
     ;(confirmReceipt as any).mockResolvedValue(order({ status: 'COMPLETED' }))
     renderOrders()
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())

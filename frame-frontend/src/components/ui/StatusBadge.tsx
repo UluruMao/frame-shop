@@ -24,7 +24,7 @@ const STATUS_LABEL_ZH: Record<OrderStatus, string> = {
   PENDING: '待付款',
   PAID: '已付款',
   SHIPPED: '已发货',
-  DELIVERED: '已签收',
+  DELIVERED: '已送达',
   COMPLETED: '已完成',
   REFUND_PENDING: '退款处理中',
   REFUNDED: '已退款',
