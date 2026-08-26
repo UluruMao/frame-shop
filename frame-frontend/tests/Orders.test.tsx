@@ -224,11 +224,20 @@ describe('Orders — per-status row actions', () => {
     await waitFor(() => expect(requestRefund).toHaveBeenCalledWith(1, 'damaged on arrival'))
   })
 
-  it('COMPLETED row shows 申请退款 (within 7-day window)', async () => {
-    ;(getMyOrders as any).mockResolvedValue(page([order({ status: 'COMPLETED' })]))
+  it('COMPLETED row shows 申请退款 when within the 7-day window', async () => {
+    const recent = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days ago
+    ;(getMyOrders as any).mockResolvedValue(page([order({ status: 'COMPLETED', completedAt: recent })]))
     renderOrders()
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /申请退款/i })).toBeInTheDocument()
+  })
+
+  it('COMPLETED row hides 申请退款 past the 7-day window (backend still enforces it)', async () => {
+    const stale = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() // 10 days ago
+    ;(getMyOrders as any).mockResolvedValue(page([order({ status: 'COMPLETED', completedAt: stale })]))
+    renderOrders()
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /申请退款/i })).not.toBeInTheDocument()
   })
 
   it('REFUND_PENDING row shows a 退款处理中 badge', async () => {

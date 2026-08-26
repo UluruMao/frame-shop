@@ -23,6 +23,18 @@ import { formatPrice } from '@/lib/format'
 import type { Order, OrderItem, OrderStatus, Review } from '@/api/types'
 
 /**
+ * A COMPLETED order is refundable for 7 days after the guest confirmed receipt.
+ * Matches the backend's REFUND_WINDOW_DAYS guard — this hides the now-useless
+ * button past the window; the backend is the real authority (a tampered client
+ * that re-shows the button still gets a 409 from requestRefund).
+ */
+const REFUND_WINDOW_DAYS = 7
+function refundWindowOpen(completedAt?: string): boolean {
+  if (!completedAt) return false
+  return Date.now() - new Date(completedAt).getTime() < REFUND_WINDOW_DAYS * 24 * 60 * 60 * 1000
+}
+
+/**
  * My orders: tabbed view with per-status actions, a refund-reason modal, and an
  * expandable line-items drawer. `activeStatus` drives getMyOrders' status filter.
  */
@@ -326,7 +338,7 @@ export default function Orders() {
                       </Button>
                     </>
                   )}
-                  {o.status === 'COMPLETED' && (
+                  {o.status === 'COMPLETED' && refundWindowOpen(o.completedAt) && (
                     <Button
                       variant="ghost"
                       size="sm"
