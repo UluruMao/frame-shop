@@ -392,7 +392,8 @@ public class StreamConsumerService {
         } catch (DataIntegrityViolationException rethrow) {
             throw rethrow;
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new com.iflytek.frame.exception.BusinessException(
+                    com.iflytek.frame.common.ResultCode.INTERNAL_ERROR, "serialization failed");
         }
     }
 

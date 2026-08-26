@@ -188,7 +188,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             });
             return objectMapper.writeValueAsString(node);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "serialization failed");
         }
     }
 }
