@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShoppingCart, CheckCircle2, XCircle, CreditCard, RotateCw } from 'lucide-react'
+import { ShoppingCart, CheckCircle2, XCircle, CreditCard, RotateCw, Minus, Plus, Trash2 } from 'lucide-react'
 import { checkout, getOrder, payOrder } from '@/api/order'
 import { getCoinBalance } from '@/api/coin'
 import type { Order, PaymentMethod } from '@/api/types'
@@ -44,7 +44,7 @@ const POLL_TIMEOUT_MS = 30_000
  */
 export default function Checkout() {
   const navigate = useNavigate()
-  const { items, totalCents, clear } = useCart()
+  const { items, totalCents, setQuantity, remove, clear } = useCart()
 
   const [stage, setStage] = useState<Stage>('form')
   const [customerName, setCustomerName] = useState('')
@@ -211,14 +211,54 @@ export default function Checkout() {
       {stage === 'form' && (
         <form onSubmit={handleSubmit} className="space-y-4">
           <Card className="p-4">
-            <h2 className="text-sm font-medium text-slate-700 mb-3">订单摘要</h2>
-            <div className="space-y-1">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-medium text-slate-700">订单摘要</h2>
+              {items.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { if (confirm('清空购物车？')) clear() }}
+                  className="text-red-600"
+                  icon={<Trash2 className="w-3.5 h-3.5" />}
+                >
+                  清空
+                </Button>
+              )}
+            </div>
+            <div className="space-y-2">
               {items.map((i) => (
-                <div key={i.productId} className="flex justify-between text-sm">
-                  <span className="text-slate-700">
-                    {i.name} × {i.quantity}
-                  </span>
-                  <span className="text-slate-600">{formatPrice(i.priceInCents * i.quantity)}</span>
+                <div key={i.productId} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-slate-700 flex-1 truncate">{i.name}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(i.productId, i.quantity - 1)}
+                      disabled={i.quantity <= 1}
+                      className="w-6 h-6 flex items-center justify-center rounded border border-slate-300 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100"
+                      aria-label={`减少 ${i.name} 数量`}
+                    >
+                      <Minus className="w-3 h-3" />
+                    </button>
+                    <span className="w-8 text-center text-slate-700">{i.quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(i.productId, i.quantity + 1)}
+                      disabled={i.quantity >= i.stock}
+                      className="w-6 h-6 flex items-center justify-center rounded border border-slate-300 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100"
+                      aria-label={`增加 ${i.name} 数量`}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(i.productId)}
+                      className="ml-1 text-slate-400 hover:text-red-600"
+                      aria-label={`移除 ${i.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <span className="text-slate-600 w-24 text-right">{formatPrice(i.priceInCents * i.quantity)}</span>
                 </div>
               ))}
             </div>
