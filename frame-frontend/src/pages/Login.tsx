@@ -28,7 +28,7 @@ export default function Login() {
       setAuth(res.token, { userId: res.userId, username: res.username, role: res.role })
       navigate(from, { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'login failed')
+      setError(err instanceof Error ? err.message : '登入失败')
     } finally {
       setLoading(false)
     }
@@ -42,10 +42,10 @@ export default function Login() {
       >
         <div className="flex items-center gap-2">
           <LogIn className="w-5 h-5 text-brand-600" />
-          <h1 className="text-lg font-semibold text-slate-800">Sign in</h1>
+          <h1 className="text-lg font-semibold text-slate-800">登入</h1>
         </div>
 
-        <Field label="Username or phone" id="username">
+        <Field label="用户名" id="username">
           <Input
             id="username"
             value={username}
@@ -54,7 +54,7 @@ export default function Login() {
           />
         </Field>
 
-        <Field label="Password" id="password">
+        <Field label="密码" id="password">
           <Input
             id="password"
             type="password"
@@ -69,9 +69,9 @@ export default function Login() {
             <p className="text-sm text-red-600">{error}</p>
             {/lock/i.test(error) && (
               <p className="text-xs text-slate-500">
-                Account locked?{' '}
+                账户已锁定？{' '}
                 <Link to="/forgot-password" className="text-brand-600 hover:underline">
-                  Reset your password
+                  重置密码
                 </Link>
               </p>
             )}
@@ -79,20 +79,20 @@ export default function Login() {
         )}
 
         <Button type="submit" loading={loading} className="w-full">
-          {loading ? 'Signing in…' : 'Sign in'}
+          {loading ? '登入中…' : '登入'}
         </Button>
 
         <p className="text-xs text-slate-400 text-center">
-          Demo credentials: admin / admin123
+          演示账号：admin / admin123
         </p>
         <p className="text-xs text-slate-500 text-center">
           <Link to="/forgot-password" className="text-brand-600 hover:underline">
-            Forgot password?
+            忘记密码？
           </Link>
           {' · '}
-          No account?{' '}
+          没有账号？{' '}
           <Link to="/register" className="text-brand-600 hover:underline">
-            Register
+            注册账号
           </Link>
         </p>
       </form>

@@ -8,7 +8,7 @@ import Register from '@/pages/Register'
  * Register flow test (UC001).
  *
  * Boundary: @/api/auth is mocked — getCaptcha, sendCode, register are vi.fn()s.
- * No real SMS is sent. The test fills the form, clicks "Get code" (asserting
+ * No real SMS is sent. The test fills the form, clicks "获取验证码" (asserting
  * sendCode was called with purpose 'REGISTER'), then submits and asserts
  * register() was called with agreed=true.
  */
@@ -42,6 +42,15 @@ describe('Register — SMS-gated flow (UC001)', () => {
     vi.mocked(register).mockResolvedValue({ id: 1, username: 'alice', role: 'USER' })
   })
 
+  it('renders Chinese labels', async () => {
+    renderRegister()
+    await waitFor(() => {
+      expect(vi.mocked(getCaptcha)).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.getByRole('heading', { name: /注册/ })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/手机号/)).toBeInTheDocument()
+  })
+
   it('sends an SMS code with purpose REGISTER, then registers with agreed=true', async () => {
     const user = userEvent.setup()
     renderRegister()
@@ -52,14 +61,14 @@ describe('Register — SMS-gated flow (UC001)', () => {
     })
 
     // Fill the form.
-    await user.type(screen.getByPlaceholderText(/username/i), 'alice')
-    await user.type(screen.getByPlaceholderText(/password/i), 'Secret123!')
-    await user.type(screen.getByPlaceholderText(/phone/i), '13800000000')
+    await user.type(screen.getByPlaceholderText(/用户名/), 'alice')
+    await user.type(screen.getByPlaceholderText(/密码/), 'Secret123!')
+    await user.type(screen.getByPlaceholderText(/手机号/), '13800000000')
     // Type the captcha answer (input inside CaptchaImage, placeholder "captcha").
     await user.type(screen.getByPlaceholderText('captcha'), 'ABCD')
 
-    // Click "Get code" → sendCode called with purpose REGISTER.
-    await user.click(screen.getByRole('button', { name: /get code/i }))
+    // Click "获取验证码" → sendCode called with purpose REGISTER.
+    await user.click(screen.getByRole('button', { name: /获取验证码/ }))
     await waitFor(() => {
       expect(vi.mocked(sendCode)).toHaveBeenCalledTimes(1)
     })
@@ -68,13 +77,13 @@ describe('Register — SMS-gated flow (UC001)', () => {
     )
 
     // Enter the verification code.
-    await user.type(screen.getByPlaceholderText(/verification code/i), '123456')
+    await user.type(screen.getByPlaceholderText(/验证码/), '123456')
 
     // Agree to the terms.
     await user.click(screen.getByRole('checkbox'))
 
     // Submit → register called with agreed=true.
-    await user.click(screen.getByRole('button', { name: /register/i }))
+    await user.click(screen.getByRole('button', { name: /注册/ }))
     await waitFor(() => {
       expect(vi.mocked(register)).toHaveBeenCalledTimes(1)
     })
@@ -91,16 +100,16 @@ describe('Register — SMS-gated flow (UC001)', () => {
       expect(vi.mocked(getCaptcha)).toHaveBeenCalledTimes(1)
     })
 
-    await user.type(screen.getByPlaceholderText(/username/i), 'bob')
-    await user.type(screen.getByPlaceholderText(/password/i), 'Secret123!')
-    await user.type(screen.getByPlaceholderText(/phone/i), '13800000000')
+    await user.type(screen.getByPlaceholderText(/用户名/), 'bob')
+    await user.type(screen.getByPlaceholderText(/密码/), 'Secret123!')
+    await user.type(screen.getByPlaceholderText(/手机号/), '13800000000')
     await user.type(screen.getByPlaceholderText('captcha'), 'ABCD')
-    await user.type(screen.getByPlaceholderText(/verification code/i), '123456')
+    await user.type(screen.getByPlaceholderText(/验证码/), '123456')
 
     // Do NOT check the terms box → submit is clicked but register is NOT called.
-    await user.click(screen.getByRole('button', { name: /register/i }))
+    await user.click(screen.getByRole('button', { name: /注册/ }))
 
-    expect(screen.getByText(/please agree to the terms/i)).toBeInTheDocument()
+    expect(screen.getByText(/请先同意条款/)).toBeInTheDocument()
     expect(vi.mocked(register)).not.toHaveBeenCalled()
   })
 })
