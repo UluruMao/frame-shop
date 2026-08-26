@@ -37,10 +37,15 @@ Plan: `docs/superpowers/plans/2026-08-25-frontend-beautify-and-reuse.md`. All 23
 - **`IdempotentInsert`** converted CoinServiceImpl debug logs drop `e.getMessage()` — rare-race debug path; brief's own example dropped the log entirely. (T19)
 - **`StreamConsumerService` raw-exception catch is broad `Exception`** — non-serialization escape mislabeled "serialization failed". Already-error path, brief-mandated message. (T20)
 
-## E2E validation gap (resolved by VM redeploy — Tasks 27/28)
+## Phase 4 (cloud deploy to 172.29.231.145) — DEFERRED, user decision 2026-08-26
+- User decided to **refine the UI first** (on localhost), then deploy later in a new chat window. Tasks 25–30 cancelled/deferred, not deleted.
+- The cloud-server constraints still hold whenever deployment resumes: read-only recon; own ports/DB name/systemd unit/nginx site; never disturb pre-existing services/data on `172.29.231.145`.
+- The VM-redeploy e2e-validation gap (below) should be done as part of or before the cloud deploy.
+
+## E2E validation gap (resolved by VM redeploy — was Tasks 27/28)
 - The e2e suite (`e2e/run-tests.mjs`) runs against the **live deployed VM** (`localhost:8888`), which still runs the OLD backend (pre-this-branch).
 - Cannot yet validate the new contract introduced by:
-  - **T22 (pagination `page`→`current`)** — the breaking change. Frontend `api/chat.ts` + e2e `chat.test.mjs` + `ChatIntegrationTest` all send `current=`; backend `mvn test` 180/180 green. True end-to-end validation requires redeploying the VM (T27/T28), then re-running `node e2e/run-tests.mjs`.
+  - **T22 (pagination `page`→`current`)** — the breaking change. Frontend `api/chat.ts` + e2e `chat.test.mjs` + `ChatIntegrationTest` all send `current=`; backend `mvn test` 180/180 green. True end-to-end validation requires redeploying the VM, then re-running `node e2e/run-tests.mjs`.
   - **T21 (`@PreAuthorize`)** + **T23 (`@Phone`/`@SmsCode`)** — likewise fully validated only once the new backend is deployed.
 - T22 report: e2e run 50/67, all 17 failures = pre-existing SMS-registration cascade on the old-VM backend (NOT caused by this branch); new `current=` URLs confirmed sent in run-log.
 - **Action at T27/T28:** redeploy the VM with the new jar, re-run `node e2e/run-tests.mjs`, confirm 67/67 (or documented green baseline). The cloud-server deployment (T25–T30, `172.29.231.145`) is a SEPARATE host and does NOT satisfy this — the VM redeploy does.

@@ -1,5 +1,7 @@
 # Frontend Beautify + Component Reuse + Backend Consolidation Implementation Plan
 
+> **STATUS (2026-08-26):** Phases 1–3 (Tasks 1–24) COMPLETE + review-clean. **Phase 4 (Tasks 25–30, cloud deploy to 172.29.231.145) DEFERRED** — user decided to refine the UI first on localhost, then deploy later in a new chat window. See `.superpowers/sdd/2026-08-25-frontend-beautify-and-reuse/progress.md` + `docs/superpowers/skipped-issues.md` for the full state. When resuming: refine UI per user feedback, then run Phase 4 (recon → own ports/DB/unit → transfer → nginx → verify, no disturbance to existing services). Outstanding: VM redeploy for e2e validation of the new backend contract (pagination `current=`, `@PreAuthorize`, validators).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Unify the Frame Shop frontend on one polished dialect via a reusable `ui/` kit + `lib/` utils, extract backend duplication into self-contained mergeable kits, then deploy the improved app to `172.29.231.145` without disturbing pre-existing services there.
