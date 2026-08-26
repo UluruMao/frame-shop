@@ -1,22 +1,35 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import Dashboard from '@/pages/Dashboard'
 
+vi.mock('@/api/stats', () => ({
+  getAdminStats: vi.fn().mockResolvedValue({
+    totalRevenueCents: 48200,
+    totalOrders: 312,
+    totalProducts: 6,
+    refundCount: 14,
+    avgRating: 4.2,
+    monthlyRevenue: [{ month: '2026-03', revenueCents: 8100 }],
+  }),
+}))
+
 describe('Dashboard', () => {
-  it('renders the heading and the four stat tiles', () => {
+  it('renders the 5 stat tiles from the API', async () => {
     render(<Dashboard />)
-    expect(screen.getByText('Dashboard')).toBeInTheDocument()
-    // One of the stat labels — proves the stats array rendered.
-    expect(screen.getByText('Total sales')).toBeInTheDocument()
-    // The chart caption.
-    expect(screen.getByText('Monthly sales')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('¥482.00')).toBeInTheDocument())
+    expect(screen.getByText('312')).toBeInTheDocument()
+    expect(screen.getByText('6')).toBeInTheDocument()
+    // refundRate = 14/312 ≈ 4.49%
+    expect(screen.getByText(/4\.49%/)).toBeInTheDocument()
+    expect(screen.getByText('4.2')).toBeInTheDocument()
   })
 
-  it('renders all four stat values', () => {
+  it('renders Chinese tile labels', async () => {
     render(<Dashboard />)
-    expect(screen.getByText('$12,480')).toBeInTheDocument()
-    expect(screen.getByText('284')).toBeInTheDocument()
-    expect(screen.getByText('18')).toBeInTheDocument()
-    expect(screen.getByText('7')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('总营收')).toBeInTheDocument())
+    expect(screen.getByText('总订单')).toBeInTheDocument()
+    expect(screen.getByText('商品数')).toBeInTheDocument()
+    expect(screen.getByText('退款率')).toBeInTheDocument()
+    expect(screen.getByText('平均评分')).toBeInTheDocument()
   })
 })
