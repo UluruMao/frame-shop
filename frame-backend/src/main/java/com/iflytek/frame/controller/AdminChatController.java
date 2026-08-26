@@ -4,6 +4,7 @@ import com.iflytek.frame.common.Result;
 import com.iflytek.frame.dto.ChatSessionVO;
 import com.iflytek.frame.service.ChatService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,11 +16,13 @@ public class AdminChatController {
 
     private final ChatService chatService;
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/sessions")
     public Result<List<ChatSessionVO>> inbox() {
         return Result.success(chatService.openSessions());
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/sessions/{id}/messages")
     public Result<?> history(@PathVariable Long id,
                              @RequestParam(defaultValue = "1") int page,

@@ -85,8 +85,13 @@ class OperationLogAspectIntegrationTest {
         req.setRemoteAddr("127.0.0.1");
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(req));
 
-        // the aspect reads the principal from SecurityContextHolder
-        SecurityUser su = new SecurityUser(1L, "admin", Role.ADMIN, java.util.List.of());
+        // the aspect reads the principal from SecurityContextHolder.
+        // The authorities list must carry ROLE_ADMIN now that the admin controller
+        // methods are @PreAuthorize("hasRole('ADMIN')")-gated (Task 21) — this direct
+        // bean call bypasses the HTTP filter chain, so the SecurityContext is the only
+        // place method security can read the role from. Mirrors SecurityUser.from(claims).
+        SecurityUser su = new SecurityUser(1L, "admin", Role.ADMIN,
+                java.util.List.of(new SecurityUser.Authority("ROLE_ADMIN")));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(su, null, su.authorities()));
 

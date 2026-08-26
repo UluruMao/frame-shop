@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -30,6 +31,7 @@ public class AdminOrderController {
     private final AdminOrderService adminOrderService;
 
     @Operation(summary = "List all orders (optionally filtered by status)")
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/orders")
     public Result<PageResult<Order>> listOrders(@Valid @ParameterObject PageQuery q,
                                                 @RequestParam(required = false) OrderStatus status) {
@@ -37,6 +39,7 @@ public class AdminOrderController {
     }
 
     @Operation(summary = "Ship a paid order (record tracking number)")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/orders/{id}/ship")
     public Result<Void> ship(@PathVariable Long id, @RequestBody ShipRequest body) {
         adminOrderService.ship(id, body.trackingNumber());
@@ -44,6 +47,7 @@ public class AdminOrderController {
     }
 
     @Operation(summary = "Mark a shipped order as delivered")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/orders/{id}/deliver")
     public Result<Void> deliver(@PathVariable Long id) {
         adminOrderService.deliver(id);
@@ -51,12 +55,14 @@ public class AdminOrderController {
     }
 
     @Operation(summary = "List orders pending refund adjudication")
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/refunds")
     public Result<PageResult<Order>> refunds(@Valid @ParameterObject PageQuery q) {
         return Result.success(adminOrderService.refundRequests(q));
     }
 
     @Operation(summary = "Approve a refund request (recredit stock)")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/refunds/{orderId}/approve")
     public Result<Void> approveRefund(@PathVariable Long orderId) {
         adminOrderService.approveRefund(orderId);
@@ -64,6 +70,7 @@ public class AdminOrderController {
     }
 
     @Operation(summary = "Deny a refund request (return to SHIPPED)")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/refunds/{orderId}/deny")
     public Result<Void> denyRefund(@PathVariable Long orderId) {
         adminOrderService.denyRefund(orderId);
