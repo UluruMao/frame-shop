@@ -1,7 +1,8 @@
-import { createBrowserRouter, type RouteObject } from 'react-router-dom'
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom'
 import MainLayout from '@/layouts/MainLayout'
 import RequireAuth from './RequireAuth'
 import { CartProvider } from '@/store/CartContext'
+import { useAuthStore } from '@/store/useAuthStore'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import ForgotPassword from '@/pages/ForgotPassword'
@@ -14,6 +15,13 @@ import Coins from '@/pages/Coins'
 import Admin from '@/pages/Admin'
 import Profile from '@/pages/Profile'
 import Chat from '@/pages/Chat'
+
+/** Index route: guests (no token) land on Products; logged-in users land on Dashboard. */
+function IndexRoute() {
+  const token = useAuthStore((s) => s.token)
+  // Guests (no token) → Products; logged-in → Dashboard (admin/user both land on Dashboard).
+  return token ? <Navigate to="/dashboard" replace /> : <Navigate to="/products" replace />
+}
 
 const routes: RouteObject[] = [
   { path: '/login', element: <Login /> },
@@ -31,7 +39,7 @@ const routes: RouteObject[] = [
       </CartProvider>
     ),
     children: [
-      { index: true, element: <RequireAuth><Dashboard /></RequireAuth> },
+      { index: true, element: <IndexRoute /> },
       { path: 'dashboard', element: <RequireAuth><Dashboard /></RequireAuth> },
       // Public catalog browse (UC000: guests may browse/search/sort). Add-to-cart stays protected.
       { path: 'products', element: <Products /> },
