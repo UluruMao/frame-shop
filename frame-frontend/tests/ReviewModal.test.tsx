@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import ReviewModal from '@/components/ReviewModal'
 
 vi.mock('@/api/review', () => ({
@@ -47,5 +48,17 @@ describe('ReviewModal', () => {
     render(<ReviewModal orderId={1} productId={100} existing={null} onClose={onClose} onSuccess={() => {}} />)
     fireEvent.click(screen.getByText('取消'))
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('uses the Modal dialog role (a11y)', () => {
+    render(<ReviewModal orderId={1} productId={2} existing={null} onClose={() => {}} onSuccess={() => {}} />)
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true')
+  })
+
+  it('calls onClose on Escape', async () => {
+    const onClose = vi.fn()
+    render(<ReviewModal orderId={1} productId={2} existing={null} onClose={onClose} onSuccess={() => {}} />)
+    await userEvent.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

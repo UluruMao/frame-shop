@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
 import StarRating from './StarRating'
+import Modal from './ui/Modal'
 import { createReview, updateReview, uploadReviewImage } from '@/api/review'
 import type { Review } from '@/api/types'
-import Card from './ui/Card'
 import { Textarea } from './ui/Input'
 import Button from './ui/Button'
 
@@ -58,56 +57,56 @@ export default function ReviewModal({ orderId, productId, existing, onClose, onS
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <Card className="w-full max-w-md p-5 shadow-lg">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold">{existing ? '编辑评价' : '写评价'}</h2>
-          <button onClick={onClose}><X className="h-5 w-5 text-slate-400" /></button>
-        </div>
-        <div className="space-y-3">
-          <StarRating label="商品质量" value={quality} onChange={setQuality} />
-          <StarRating label="物流速度" value={logistics} onChange={setLogistics} />
-          <StarRating label="客服态度" value={service} onChange={setService} />
-          <Textarea
-            rows={3}
-            placeholder="图文评价（可选）"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-          />
-          <div>
-            <input
-              type="file"
-              accept=".jpg,.jpeg,.png"
-              multiple
-              onChange={(e) => onPickImages(e.target.files)}
-              disabled={imageUrls.length >= MAX_IMAGES}
-            />
-            <div className="mt-1 flex flex-wrap gap-1">
-              {imageUrls.map((u, i) => (
-                <div key={i} className="relative">
-                  <img src={u} alt="" loading="lazy" className="h-12 w-12 rounded object-cover" />
-                  <button
-                    type="button"
-                    className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1 text-xs text-white"
-                    onClick={() => setImageUrls((p) => p.filter((_, j) => j !== i))}
-                  >×</button>
-                </div>
-              ))}
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
-            匿名评价
-          </label>
-        </div>
-        {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
-        <div className="mt-4 flex justify-end gap-2">
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={existing ? '编辑评价' : '写评价'}
+      footer={
+        <>
+          {err && <p className="mr-auto text-sm text-red-600">{err}</p>}
           <Button variant="secondary" onClick={onClose}>取消</Button>
           <Button onClick={submit} loading={busy}>
             {busy ? '提交中…' : '提交评价'}
           </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <StarRating label="商品质量" value={quality} onChange={setQuality} />
+        <StarRating label="物流速度" value={logistics} onChange={setLogistics} />
+        <StarRating label="客服态度" value={service} onChange={setService} />
+        <Textarea
+          rows={3}
+          placeholder="图文评价（可选）"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+        />
+        <div>
+          <input
+            type="file"
+            accept=".jpg,.jpeg,.png"
+            multiple
+            onChange={(e) => onPickImages(e.target.files)}
+            disabled={imageUrls.length >= MAX_IMAGES}
+          />
+          <div className="mt-1 flex flex-wrap gap-1">
+            {imageUrls.map((u, i) => (
+              <div key={i} className="relative">
+                <img src={u} alt="" loading="lazy" className="h-12 w-12 rounded object-cover" />
+                <button
+                  type="button"
+                  className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1 text-xs text-white"
+                  onClick={() => setImageUrls((p) => p.filter((_, j) => j !== i))}
+                >×</button>
+              </div>
+            ))}
+          </div>
         </div>
-      </Card>
-    </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
+          匿名评价
+        </label>
+      </div>
+    </Modal>
   )
 }
