@@ -117,7 +117,7 @@ public class SecurityConfig {
                                 "/admin/operation-logs").hasRole("ADMIN")
                         // admin-only order lifecycle + refund adjudication (Phase C)
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
-                                "/admin/orders", "/admin/refunds").hasRole("ADMIN")
+                                "/admin/orders", "/admin/refunds", "/admin/stats").hasRole("ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/admin/orders/{id}/ship", "/admin/orders/{id}/deliver",
                                 "/admin/refunds/{orderId}/approve", "/admin/refunds/{orderId}/deny")
