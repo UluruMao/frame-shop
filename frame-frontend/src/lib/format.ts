@@ -6,6 +6,9 @@
  * Replaces what pages used to inline as `¥{(priceInCents / 100).toFixed(2)}`.
  */
 export function formatPrice(priceInCents: number): string {
+  // Guard: callers feed real integer cents, but clamp bad input (NaN / negative /
+  // non-finite / float) to ¥0.00 rather than rendering "¥NaN" or negative amounts.
+  if (!Number.isFinite(priceInCents) || priceInCents < 0) return '¥0.00'
   return `¥${(priceInCents / 100).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

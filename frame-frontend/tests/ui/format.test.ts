@@ -12,6 +12,11 @@ describe('formatPrice', () => {
   it('handles large values', () => {
     expect(formatPrice(123456789)).toBe('¥1,234,567.89')
   })
+  it('returns ¥0.00 for NaN, negative, and non-finite input', () => {
+    expect(formatPrice(NaN)).toBe('¥0.00')
+    expect(formatPrice(-1299)).toBe('¥0.00')
+    expect(formatPrice(Number.POSITIVE_INFINITY)).toBe('¥0.00')
+  })
 })
 
 describe('cn', () => {
