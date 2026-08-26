@@ -71,7 +71,7 @@ export const suite = {
       name: 'UC011 owner fetches session history (empty) → 200 + page shape',
       run: async (ctx) => {
         const res = await http.get(
-          `/chat/sessions/${ctx.chatSessionId}/messages?page=1&size=50`,
+          `/chat/sessions/${ctx.chatSessionId}/messages?current=1&size=50`,
           { token: ctx.chatUserToken })
         assert(res.status === 200, `expected 200 on history, got ${res.status}`)
         const page = res.body.data
@@ -93,7 +93,7 @@ export const suite = {
         // exist — tolerated defensively per the brief.)
         const { token: tokenB } = await registerAndLogin(http, 'b')
         const res = await http.get(
-          `/chat/sessions/${ctx.chatSessionId}/messages?page=1&size=50`,
+          `/chat/sessions/${ctx.chatSessionId}/messages?current=1&size=50`,
           { token: tokenB })
         assert(res.status === 403 || res.status === 404,
           `expected 403/404 (ownership denied), got ${res.status}`)
@@ -115,7 +115,7 @@ export const suite = {
       name: 'UC011 admin reads a session message history → 200',
       run: async (ctx) => {
         const res = await http.get(
-          `/admin/chat/sessions/${ctx.chatSessionId}/messages?page=1&size=50`,
+          `/admin/chat/sessions/${ctx.chatSessionId}/messages?current=1&size=50`,
           { token: ctx.adminToken })
         assert(res.status === 200, `expected 200 on admin history, got ${res.status}`)
         assert(res.body.data != null, 'expected admin history page data present')

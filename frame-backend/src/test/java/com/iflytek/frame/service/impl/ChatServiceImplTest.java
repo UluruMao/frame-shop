@@ -5,6 +5,7 @@ import com.iflytek.frame.entity.ChatMessage;
 import com.iflytek.frame.entity.ChatSession;
 import com.iflytek.frame.mapper.ChatMessageMapper;
 import com.iflytek.frame.mapper.ChatSessionMapper;
+import com.iflytek.frame.util.PageQuery;
 import com.iflytek.frame.websocket.AdminPresenceRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -117,8 +118,15 @@ class ChatServiceImplTest {
         when(sessionMapper.selectById(7L)).thenReturn(session);
 
         assertThrows(com.iflytek.frame.exception.BusinessException.class,
-                () -> chatService.historyForUser(7L, 999L, 1, 50));
+                () -> chatService.historyForUser(7L, 999L, pageQuery(1, 50)));
         // messages must NOT be paginated when ownership fails
         verify(messageMapper, never()).selectPage(any(), any());
+    }
+
+    private static PageQuery pageQuery(long current, long size) {
+        PageQuery q = new PageQuery();
+        q.setCurrent(current);
+        q.setSize(size);
+        return q;
     }
 }

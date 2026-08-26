@@ -12,6 +12,7 @@ import com.iflytek.frame.exception.BusinessException;
 import com.iflytek.frame.mapper.ChatMessageMapper;
 import com.iflytek.frame.mapper.ChatSessionMapper;
 import com.iflytek.frame.service.ChatService;
+import com.iflytek.frame.util.PageQuery;
 import com.iflytek.frame.websocket.AdminPresenceRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -89,15 +90,15 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
-    public PageResult<ChatMessageVO> historyForUser(Long sessionId, Long userId, int page, int size) {
+    public PageResult<ChatMessageVO> historyForUser(Long sessionId, Long userId, PageQuery query) {
         // ownership check BEFORE paginating — closes the IDOR hole
         loadAndCheckOwnership(sessionId, userId);
-        return history(sessionId, page, size);
+        return history(sessionId, query);
     }
 
     @Override
-    public PageResult<ChatMessageVO> history(Long sessionId, int page, int size) {
-        Page<ChatMessage> p = new Page<>(page, size);
+    public PageResult<ChatMessageVO> history(Long sessionId, PageQuery query) {
+        Page<ChatMessage> p = new Page<>(query.getCurrent(), query.getSize());
         Page<ChatMessage> result = messageMapper.selectPage(p,
                 new LambdaQueryWrapper<ChatMessage>()
                         .eq(ChatMessage::getSessionId, sessionId)
