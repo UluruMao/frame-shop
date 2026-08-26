@@ -19,9 +19,22 @@ const STATUS_COLOR: Record<OrderStatus, string> = {
   FAILED: 'bg-red-100 text-red-700',
 }
 
+/** Chinese display labels for each order status (UC007/UC008/UC009 terminology). */
+const STATUS_LABEL_ZH: Record<OrderStatus, string> = {
+  PENDING: '待付款',
+  PAID: '已付款',
+  SHIPPED: '已发货',
+  DELIVERED: '已签收',
+  COMPLETED: '已完成',
+  REFUND_PENDING: '退款处理中',
+  REFUNDED: '已退款',
+  CANCELLED: '已取消',
+  FAILED: '失败',
+}
+
 export interface StatusBadgeProps {
   status: OrderStatus
-  /** Optional override label (defaults to the raw status string). */
+  /** Optional override label (defaults to the Chinese status label). */
   label?: string
   className?: string
 }
@@ -29,7 +42,7 @@ export interface StatusBadgeProps {
 export default function StatusBadge({ status, label, className }: StatusBadgeProps) {
   return (
     <span className={cn('px-2 py-0.5 rounded text-xs font-medium', STATUS_COLOR[status], className)}>
-      {label ?? status}
+      {label ?? STATUS_LABEL_ZH[status]}
     </span>
   )
 }
