@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.iflytek.frame.mapper.AdminStatsMapper">
+
+    <!--
+      DashboardStatsVO is a Java record (no setters). MyBatis 3.5.13+ supports records via
+      constructor auto-mapping: with resultType (NOT a resultMap), it maps columns to the
+      canonical constructor's params by name and unboxes primitives. So the SELECT aliases
+      match the record component names exactly (totalRevenueCents, totalOrders, ...). The
+      dashboardStats() query returns the 5 tile metrics plus a NULL placeholder for
+      monthlyRevenue, which is loaded separately by monthlyRevenue() and merged by the service
+      layer (Task 10). Using a <resultMap> with <result property> would fail (records have no
+      setters), and a <constructor> block would disable native record auto-support and force
+      boxed Long/Double (no matching primitive constructor).
+    -->
+    <select id="dashboardStats" resultType="com.iflytek.frame.dto.DashboardStatsVO">
+        SELECT
+            (SELECT COALESCE(SUM(paid_in_cents), 0)
+               FROM orders
+              WHERE status IN ('PAID','SHIPPED','DELIVERED','COMPLETED')) AS totalRevenueCents,
+            (SELECT COUNT(*) FROM orders) AS totalOrders,
+            (SELECT COUNT(*) FROM product) AS totalProducts,
+            (SELECT COUNT(*) FROM orders WHERE refund_status = 'APPROVED') AS refundCount,
+            (SELECT COALESCE(AVG((quality_stars + logistics_stars + service_stars) / 3.0), 0)
+               FROM review) AS avgRating,
+            NULL AS monthlyRevenue
+    </select>
+
+    <select id="monthlyRevenue" resultType="com.iflytek.frame.dto.DashboardStatsVO$MonthRevenue">
+        SELECT DATE_FORMAT(paid_at, '%Y-%m') AS month,
+               COALESCE(SUM(paid_in_cents), 0) AS revenueCents
+          FROM orders
+         WHERE paid_at IS NOT NULL
+           AND status IN ('PAID','SHIPPED','DELIVERED','COMPLETED')
+           AND paid_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+         GROUP BY DATE_FORMAT(paid_at, '%Y-%m')
+         ORDER BY month ASC
+    </select>
+</mapper>
