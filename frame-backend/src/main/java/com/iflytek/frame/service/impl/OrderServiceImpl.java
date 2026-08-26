@@ -30,6 +30,9 @@ import java.util.List;
 @Slf4j
 public class OrderServiceImpl implements OrderService {
 
+    /** A COMPLETED order is refundable for this many days after the guest confirmed receipt. */
+    private static final int REFUND_WINDOW_DAYS = 7;
+
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final StringRedisTemplate redis;
@@ -131,9 +134,24 @@ public class OrderServiceImpl implements OrderService {
     public void requestRefund(Long id, Long userId, String reason) {
         Long realPk = resolveOrderId(id);
         Order o = requireOwnedOrder(realPk, userId);
-        // No stock recredit here — the item is in transit; recredit happens on admin approval.
+        // Refund is requestable from SHIPPED (in transit), DELIVERED (at the depot,
+        // guest may refuse pickup), and COMPLETED (guest picked it up + found an issue
+        // — allowed within REFUND_WINDOW_DAYS of completion). No stock recredit here;
+        // recredit happens on admin approval.
         int rows = orderMapper.updateStatusAndRefund(realPk, OrderStatus.SHIPPED, OrderStatus.REFUND_PENDING,
                 RefundStatus.PENDING, reason);
+        if (rows == 0) {
+            rows = orderMapper.updateStatusAndRefund(realPk, OrderStatus.DELIVERED, OrderStatus.REFUND_PENDING,
+                    RefundStatus.PENDING, reason);
+        }
+        if (rows == 0) {
+            // COMPLETED: only within the 7-day window after completion.
+            if (o.getStatus() == OrderStatus.COMPLETED && o.getCompletedAt() != null
+                    && o.getCompletedAt().isAfter(LocalDateTime.now().minusDays(REFUND_WINDOW_DAYS))) {
+                rows = orderMapper.updateStatusAndRefund(realPk, OrderStatus.COMPLETED, OrderStatus.REFUND_PENDING,
+                        RefundStatus.PENDING, reason);
+            }
+        }
         if (rows == 0) {
             throw new BusinessException(ResultCode.CONFLICT, "order cannot request refund in current state");
         }

@@ -326,10 +326,21 @@ export default function Orders() {
                       </Button>
                     </>
                   )}
+                  {o.status === 'COMPLETED' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openRefundModal(o.id)}
+                      disabled={busyId === o.id}
+                    >
+                      申请退款
+                    </Button>
+                  )}
                   {o.status !== 'PENDING' &&
                     o.status !== 'PAID' &&
                     o.status !== 'SHIPPED' &&
                     o.status !== 'DELIVERED' &&
+                    o.status !== 'COMPLETED' &&
                     o.status !== 'REFUND_PENDING' && <span className="text-xs text-slate-300">—</span>}
                 </div>
               ),

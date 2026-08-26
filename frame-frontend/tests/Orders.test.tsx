@@ -224,6 +224,13 @@ describe('Orders — per-status row actions', () => {
     await waitFor(() => expect(requestRefund).toHaveBeenCalledWith(1, 'damaged on arrival'))
   })
 
+  it('COMPLETED row shows 申请退款 (within 7-day window)', async () => {
+    ;(getMyOrders as any).mockResolvedValue(page([order({ status: 'COMPLETED' })]))
+    renderOrders()
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /申请退款/i })).toBeInTheDocument()
+  })
+
   it('REFUND_PENDING row shows a 退款处理中 badge', async () => {
     ;(getMyOrders as any).mockResolvedValue(page([order({ status: 'REFUND_PENDING' })]))
     renderOrders()

@@ -18,6 +18,8 @@ import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.time.LocalDateTime;
+
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -306,6 +308,76 @@ class OrderServiceImplTest {
         when(orderMapper.selectById(realPk)).thenReturn(o);
         when(orderMapper.updateStatusAndRefund(realPk, OrderStatus.SHIPPED, OrderStatus.REFUND_PENDING,
                 RefundStatus.PENDING, "x")).thenReturn(0);
+        when(orderMapper.updateStatusAndRefund(realPk, OrderStatus.DELIVERED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, "x")).thenReturn(0);
+
+        assertThatThrownBy(() -> orderService.requestRefund(realPk, userId, "x"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cannot request refund");
+    }
+
+    @Test
+    void requestRefund_deliveredToRefundPending() {
+        long realPk = 12L;
+        long userId = 7L;
+        String reason = "refusing pickup at depot";
+        Order o = new Order();
+        o.setId(realPk);
+        o.setUserId(userId);
+        o.setStatus(OrderStatus.DELIVERED); // at the depot, guest may refuse
+        when(orderMapper.selectById(realPk)).thenReturn(o);
+        // SHIPPED CAS misses (order is DELIVERED, not SHIPPED); DELIVERED CAS hits.
+        when(orderMapper.updateStatusAndRefund(realPk, OrderStatus.SHIPPED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, reason)).thenReturn(0);
+        when(orderMapper.updateStatusAndRefund(realPk, OrderStatus.DELIVERED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, reason)).thenReturn(1);
+
+        orderService.requestRefund(realPk, userId, reason);
+
+        verify(orderMapper).updateStatusAndRefund(realPk, OrderStatus.DELIVERED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, reason);
+        verify(orderStockReleaseService, never()).release(any());
+    }
+
+    @Test
+    void requestRefund_completedWithin7Days_toRefundPending() {
+        long realPk = 12L;
+        long userId = 7L;
+        String reason = "found a defect after pickup";
+        Order o = new Order();
+        o.setId(realPk);
+        o.setUserId(userId);
+        o.setStatus(OrderStatus.COMPLETED);
+        o.setCompletedAt(LocalDateTime.now().minusDays(3)); // within the 7-day window
+        when(orderMapper.selectById(realPk)).thenReturn(o);
+        when(orderMapper.updateStatusAndRefund(realPk, OrderStatus.SHIPPED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, reason)).thenReturn(0);
+        when(orderMapper.updateStatusAndRefund(realPk, OrderStatus.DELIVERED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, reason)).thenReturn(0);
+        when(orderMapper.updateStatusAndRefund(realPk, OrderStatus.COMPLETED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, reason)).thenReturn(1);
+
+        orderService.requestRefund(realPk, userId, reason);
+
+        verify(orderMapper).updateStatusAndRefund(realPk, OrderStatus.COMPLETED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, reason);
+    }
+
+    @Test
+    void requestRefund_completedAfter7Days_throwsConflict() {
+        long realPk = 12L;
+        long userId = 7L;
+        Order o = new Order();
+        o.setId(realPk);
+        o.setUserId(userId);
+        o.setStatus(OrderStatus.COMPLETED);
+        o.setCompletedAt(LocalDateTime.now().minusDays(10)); // past the 7-day window
+        when(orderMapper.selectById(realPk)).thenReturn(o);
+        when(orderMapper.updateStatusAndRefund(realPk, OrderStatus.SHIPPED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, "x")).thenReturn(0);
+        when(orderMapper.updateStatusAndRefund(realPk, OrderStatus.DELIVERED, OrderStatus.REFUND_PENDING,
+                RefundStatus.PENDING, "x")).thenReturn(0);
+        // COMPLETED CAS is NOT stubbed → returns 0 (the guard skips it because the window passed).
 
         assertThatThrownBy(() -> orderService.requestRefund(realPk, userId, "x"))
                 .isInstanceOf(BusinessException.class)
