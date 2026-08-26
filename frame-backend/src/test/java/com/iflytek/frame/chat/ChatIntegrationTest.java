@@ -309,7 +309,7 @@ class ChatIntegrationTest {
     /** GET /chat/sessions/{id}/messages → unwrap Result.data.records. */
     private List<ChatMessageVO> fetchHistoryViaRest(String token, Long sessionId) {
         String json = rest.method(HttpMethod.GET)
-                .uri("http://localhost:" + port + "/chat/sessions/" + sessionId + "/messages?page=1&size=50")
+                .uri("http://localhost:" + port + "/chat/sessions/" + sessionId + "/messages?current=1&size=50")
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
                 .body(String.class);
