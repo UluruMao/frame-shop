@@ -57,3 +57,9 @@ Plan: `docs/superpowers/plans/2026-08-25-frontend-beautify-and-reuse.md`. All 23
 
 
 
+
+## UI Refinement round (feature/ui-kit-and-consolidation, 2026-08-26) — COMPLETE
+- 22 code tasks done + review-clean (1 needed a retry after an interrupted mid-rewrite; all passed review). Frontend vitest 109/109 + build green; backend mvn 186/186 (0 failures/errors/skipped). Live API verified: `/admin/stats` returns real seeded data (¥6,155.40 / 54 orders / 7 products / 3.70% refund / 4.5 rating, 6-month revenue trend); admin=200, user=403, guest=401.
+- **Visual eyeball is the user's step** (the agent cannot drive a browser): dev servers were brought up (backend 8081, frontend 5173), API contract + proxy verified; the per-page browser eyeball (countdown tick, Modal a11y, kit rendering) is left for the user. Servers stopped after verification; re-run `cd frame-backend && mvn package -DskipTests && java -jar target/*.jar` + `cd frame-frontend && npm run dev` to re-check.
+- **E2E gap (unchanged):** real e2e validation of `/admin/stats` + the T21/T22/T23 backend contracts defers to the VM redeploy (e2e runs against the old-VM backend). The 17 pre-existing SMS-cascade e2e failures are NOT caused by this branch.
+- **Deferred to the next feature round:** LLM customer-service bot; account self-deletion; chat deletion (synced admin↔user); Dashboard time-range filters / multi-chart analytics; separate admin/guest frontends; Aliyun SMS activation; VM redeploy + e2e regression; cloud deploy (Phase 4 to 172.29.231.145).
