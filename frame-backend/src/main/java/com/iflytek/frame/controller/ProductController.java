@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -45,18 +46,21 @@ public class ProductController {
     }
 
     @Operation(summary = "Create a product")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public Result<Product> create(@Valid @RequestBody ProductDTO dto) {
         return Result.success(service.create(dto));
     }
 
     @Operation(summary = "Update a product")
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public Result<Product> update(@PathVariable Long id, @Valid @RequestBody ProductDTO dto) {
         return Result.success(service.update(id, dto));
     }
 
     @Operation(summary = "Delete a product")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
         service.delete(id);
@@ -64,6 +68,7 @@ public class ProductController {
     }
 
     @Operation(summary = "Upload a product image")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/image")
     public Result<String> uploadImage(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
         return Result.success(service.uploadImage(id, file));
