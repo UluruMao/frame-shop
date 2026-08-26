@@ -192,7 +192,7 @@ INSERT INTO `product` (`name`, `price_in_cents`, `stock`, `category`, `is_flash_
 -- Demo users all share the admin password hash (admin123) for local testing:
 --   username: demo1 / demo2 / demo3 / demo4   password: admin123
 -- Re-run this whole file (mariadb -u root -p < src/main/resources/schema.sql) to reset to this seed.
--- The seed is sized so the admin Dashboard shows believable numbers (~¥48k revenue,
+-- The seed is sized so the admin Dashboard shows believable numbers (~¥6.1k revenue,
 -- ~54 orders across 6 months + statuses, ~4.2 avg rating). FK references below assume
 -- auto-increment starts at 1 after the DROP TABLE block above:
 --   user:    admin=1, demo1=2, demo2=3, demo3=4, demo4=5
@@ -339,8 +339,8 @@ INSERT INTO `order_item` (`order_id`, `product_id`, `name`, `price_in_cents`, `q
 
 -- Reviews with varied 3-5★ ratings so avgRating lands ~4.2. The review table has a unique
 -- key on (order_id, product_id), so each reviewed order appears once. Reviews are placed on
--- COMPLETED/DELIVERED orders (not on CANCELLED/REFUNDED/PAID/SHIPPED). A few 3★ reviews pull
--- the average below 5; most are 4-5★.
+-- mostly COMPLETED/DELIVERED orders (a few SHIPPED slip through; not on CANCELLED/REFUNDED/PAID).
+-- A few 3★ reviews pull the average below 5; most are 4-5★.
 INSERT INTO `review` (`order_id`, `user_id`, `product_id`, `quality_stars`, `logistics_stars`, `service_stars`, `content`) VALUES
     (1, 2, 3, 5, 5, 4, '耳机音质不错，降噪效果好'),
     (2, 3, 4, 4, 5, 5, '键盘手感很好，RGB灯漂亮'),

@@ -31,18 +31,18 @@ import Table from '@/components/ui/Table'
 /** Top-level Admin tabs: Products (CRUD), Orders (shipping/refund), and Chat (inbox). */
 type AdminTab = 'products' | 'orders' | 'chat'
 
-/** Status-filter options for the admin orders table. */
+/** Status-filter options for the admin orders table. Labels match StatusBadge (Task 3). */
 const ORDER_STATUS_FILTERS: { label: string; value?: OrderStatus }[] = [
-  { label: 'All' },
-  { label: 'Pending', value: 'PENDING' },
-  { label: 'Paid', value: 'PAID' },
-  { label: 'Shipped', value: 'SHIPPED' },
-  { label: 'Delivered', value: 'DELIVERED' },
-  { label: 'Completed', value: 'COMPLETED' },
-  { label: 'Refund pending', value: 'REFUND_PENDING' },
-  { label: 'Refunded', value: 'REFUNDED' },
-  { label: 'Cancelled', value: 'CANCELLED' },
-  { label: 'Failed', value: 'FAILED' },
+  { label: '全部' },
+  { label: '待付款', value: 'PENDING' },
+  { label: '已付款', value: 'PAID' },
+  { label: '已发货', value: 'SHIPPED' },
+  { label: '已签收', value: 'DELIVERED' },
+  { label: '已完成', value: 'COMPLETED' },
+  { label: '退款处理中', value: 'REFUND_PENDING' },
+  { label: '已退款', value: 'REFUNDED' },
+  { label: '已取消', value: 'CANCELLED' },
+  { label: '失败', value: 'FAILED' },
 ]
 
 /**

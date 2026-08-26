@@ -64,8 +64,8 @@ describe('Register — SMS-gated flow (UC001)', () => {
     await user.type(screen.getByPlaceholderText(/用户名/), 'alice')
     await user.type(screen.getByPlaceholderText(/密码/), 'Secret123!')
     await user.type(screen.getByPlaceholderText(/手机号/), '13800000000')
-    // Type the captcha answer (input inside CaptchaImage, placeholder "captcha").
-    await user.type(screen.getByPlaceholderText('captcha'), 'ABCD')
+    // Type the captcha answer (input inside CaptchaImage, placeholder "图形验证码").
+    await user.type(screen.getByPlaceholderText('图形验证码'), 'ABCD')
 
     // Click "获取验证码" → sendCode called with purpose REGISTER.
     await user.click(screen.getByRole('button', { name: /获取验证码/ }))
@@ -76,8 +76,8 @@ describe('Register — SMS-gated flow (UC001)', () => {
       expect.objectContaining({ phone: '13800000000', purpose: 'REGISTER' }),
     )
 
-    // Enter the verification code.
-    await user.type(screen.getByPlaceholderText(/验证码/), '123456')
+    // Enter the verification code (exact match — "图形验证码" is the captcha input).
+    await user.type(screen.getByPlaceholderText('验证码'), '123456')
 
     // Agree to the terms.
     await user.click(screen.getByRole('checkbox'))
@@ -103,8 +103,8 @@ describe('Register — SMS-gated flow (UC001)', () => {
     await user.type(screen.getByPlaceholderText(/用户名/), 'bob')
     await user.type(screen.getByPlaceholderText(/密码/), 'Secret123!')
     await user.type(screen.getByPlaceholderText(/手机号/), '13800000000')
-    await user.type(screen.getByPlaceholderText('captcha'), 'ABCD')
-    await user.type(screen.getByPlaceholderText(/验证码/), '123456')
+    await user.type(screen.getByPlaceholderText('图形验证码'), 'ABCD')
+    await user.type(screen.getByPlaceholderText('验证码'), '123456')
 
     // Do NOT check the terms box → submit is clicked but register is NOT called.
     await user.click(screen.getByRole('button', { name: /注册/ }))

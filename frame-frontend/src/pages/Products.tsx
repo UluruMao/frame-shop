@@ -10,6 +10,7 @@ import Card from '@/components/ui/Card'
 import EmptyState from '@/components/ui/EmptyState'
 import Pagination from '@/components/ui/Pagination'
 import Spinner from '@/components/ui/Spinner'
+import PageHeader from '@/components/ui/PageHeader'
 import { formatPrice } from '@/lib/format'
 
 export default function Products() {
@@ -44,7 +45,7 @@ export default function Products() {
 
   return (
     <div className="mx-auto max-w-6xl p-4">
-      <h1 className="mb-4 text-2xl font-bold">商品列表</h1>
+      <PageHeader className="mb-4" title="商品列表" count={total} />
       <div className="mb-4 flex flex-wrap gap-2">
         <Input
           className="w-auto"

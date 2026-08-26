@@ -372,11 +372,11 @@ export default function Checkout() {
                 </div>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Order</span>
+                    <span className="text-slate-500">订单</span>
                     <span className="text-slate-700">#{orderId}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Status</span>
+                    <span className="text-slate-500">状态</span>
                     <StatusBadge status={order.status} />
                   </div>
                   <div className="flex justify-between border-t border-slate-100 mt-2 pt-2 font-medium">

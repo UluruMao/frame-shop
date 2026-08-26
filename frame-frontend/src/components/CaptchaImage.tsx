@@ -25,7 +25,7 @@ export default function CaptchaImage({ onChange }: {
         <RefreshCw className="w-4 h-4" />
       </button>
       <input
-        placeholder="captcha"
+        placeholder="图形验证码"
         className="w-24 px-2 py-1 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         value={answer}
         onChange={(e) => { setAnswer(e.target.value); onChange(cap?.captchaId ?? '', e.target.value) }}

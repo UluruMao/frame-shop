@@ -111,4 +111,12 @@ describe('Products — catalog (UC000)', () => {
     await waitFor(() => expect(screen.getByText(/共 2 页/)).toBeInTheDocument())
     expect(screen.getByRole('button', { name: '下一页' })).toBeInTheDocument()
   })
+
+  it('uses the PageHeader kit for the heading (not text-2xl font-bold)', async () => {
+    renderProducts()
+    await waitFor(() => expect(screen.getByText('Red Widget')).toBeInTheDocument())
+    const h1 = screen.getByRole('heading', { level: 1 })
+    expect(h1).toHaveClass('text-xl')
+    expect(h1).not.toHaveClass('text-2xl')
+  })
 })
