@@ -644,9 +644,13 @@ Group=frame
 WorkingDirectory=/opt/frame
 # %i = the instance name (8081 or 8082). --server.port overrides the hardcoded
 # 8081 in application-prod.yml so each instance binds a distinct port.
+# --server.address=127.0.0.1 binds loopback-ONLY so the backends are NOT publicly
+# exposed on the cloud host (Nginx :80 is the sole public entry; it proxies to
+# 127.0.0.1:808x). Spring Boot defaults to 0.0.0.0 — override it.
 ExecStart=/usr/bin/java -jar /opt/frame/frame-backend-0.0.1-SNAPSHOT.jar \
     --spring.profiles.active=prod \
-    --server.port=%i
+    --server.port=%i \
+    --server.address=127.0.0.1
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -806,6 +810,7 @@ curl -s http://172.29.231.145/ | head -c 120
 # Both instances share Redis? (after a flash sale opens)
 redis-cli -p 16379 keys 'stock:*'
 
-# Our ports listening on 127.0.0.1 only (not 0.0.0.0)?
+# Our ports listening on 127.0.0.1 only (not 0.0.0.0 — backends must NOT be public)?
+# Expect 127.0.0.1:8081, 127.0.0.1:8082, 127.0.0.1:13306, 127.0.0.1:16379.
 ss -tlnp | grep -E '8081|8082|13306|16379'
 ```
