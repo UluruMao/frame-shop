@@ -114,10 +114,10 @@ public class CheckoutServiceImpl implements CheckoutService {
             }
             int requested = request.getCoinAmount() == null ? 0 : request.getCoinAmount();
             if (requested <= 0) {
-                throw new BusinessException(ResultCode.PARAM_INVALID, "coin amount must be positive");
+                throw new BusinessException(ResultCode.PARAM_INVALID, "金币数量必须大于 0");
             }
             if (requested > preview.getUsable()) {
-                throw new BusinessException(ResultCode.PARAM_INVALID, "coin amount exceeds allowed discount");
+                throw new BusinessException(ResultCode.PARAM_INVALID, "金币数量超过可用抵扣额度");
             }
             validatedCoinAmount = requested;
         }
@@ -125,7 +125,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 2b. One-per-user check (spec §6 step 3): reject users who already purchased.
         for (Long pid : qtyByProduct.keySet()) {
             if (Boolean.TRUE.equals(redis.hasKey(RedisKeys.seckill(pid, userId)))) {
-                throw new BusinessException(ResultCode.CONFLICT, "already purchased this item");
+                throw new BusinessException(ResultCode.CONFLICT, "您已购买过此商品");
             }
         }
 
@@ -139,13 +139,13 @@ public class CheckoutServiceImpl implements CheckoutService {
         try {
             claimResult = stockGateService.tryClaimStock(ids, qtys);
         } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
-            throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE, "stock gate unavailable");
+            throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE, "库存系统暂时不可用，请稍后再试");
         }
         switch (claimResult) {
             case "OK" -> { /* proceed — stock atomically decremented in Redis */ }
             case "NOT_INITIALIZED" -> throw new BusinessException(
-                    ResultCode.SERVICE_UNAVAILABLE, "stock not initialized");
-            default -> throw new BusinessException(ResultCode.CONFLICT, "sold out");
+                    ResultCode.SERVICE_UNAVAILABLE, "秒杀尚未开始，请稍后再试");
+            default -> throw new BusinessException(ResultCode.CONFLICT, "商品已售罄");
         }
 
         // 4. Compute total from DB prices (flash items use the discounted flash price).

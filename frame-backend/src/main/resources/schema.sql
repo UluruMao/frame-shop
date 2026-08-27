@@ -185,9 +185,13 @@ INSERT INTO `user` (`username`, `password_hash`, `role`, `phone`) VALUES
     ('admin', '$2a$10$7FzLk9ItV8zh8fPkg9WJKuTOy.cxJ61NXxGVmYaSAGg9RlBxYYfKC', 'ADMIN', '13800000000');
 
 -- Original demo products (ids 1..2).
-INSERT INTO `product` (`name`, `price_in_cents`, `stock`, `category`, `is_flash_sale`, `description`) VALUES
-    ('Flash Widget', 1999, 5, 'widgets', 1, 'Limited flash-sale item'),
-    ('Demo Gadget', 2950, 50, 'gadgets', 0, 'Regular item');
+-- Flash Widget (id=1) has flash_sale_at in the past so the openDueFlashSales scheduler
+-- (every 10s) auto-loads its stock into Redis on startup — a flash product is only
+-- purchasable once stock:{id} exists. NULL flash_sale_at = manual open only (admin
+-- clicks 开启秒杀), which surprises shoppers; a past timestamp makes the demo just work.
+INSERT INTO `product` (`name`, `price_in_cents`, `stock`, `category`, `is_flash_sale`, `flash_sale_at`, `discount_percent`, `description`) VALUES
+    ('Flash Widget', 1999, 5, 'widgets', 1, DATE_SUB(NOW(), INTERVAL 1 HOUR), 30, 'Limited flash-sale item (30% off)'),
+    ('Demo Gadget', 2950, 50, 'gadgets', 0, NULL, NULL, 'Regular item');
 
 -- ===== DEMO SEED (not production data) =====
 -- Demo users all share the admin password hash (admin123) for local testing:
@@ -206,12 +210,12 @@ INSERT INTO `user` (`username`, `password_hash`, `role`, `phone`, `nickname`) VA
     ('demo4', '$2a$10$7FzLk9ItV8zh8fPkg9WJKuTOy.cxJ61NXxGVmYaSAGg9RlBxYYfKC', 'USER', '13900000004', '买家大伟');
 
 -- More products across categories (ids 3..7; the 2 original rows above keep ids 1..2).
-INSERT INTO `product` (`name`, `price_in_cents`, `stock`, `category`, `is_flash_sale`, `description`) VALUES
-    ('无线蓝牙耳机', 12900, 80, '数码', 0, '降噪蓝牙耳机'),
-    ('机械键盘', 25900, 40, '数码', 0, 'RGB机械键盘'),
-    ('保温杯', 4900, 120, '家居', 0, '316不锈钢保温杯'),
-    ('运动手环', 9900, 60, '数码', 1, '心率运动手环'),
-    ('棉柔毛巾', 1990, 200, '家居', 0, '纯棉毛巾两条装');
+INSERT INTO `product` (`name`, `price_in_cents`, `stock`, `category`, `is_flash_sale`, `flash_sale_at`, `discount_percent`, `description`) VALUES
+    ('无线蓝牙耳机', 12900, 80, '数码', 0, NULL, NULL, '降噪蓝牙耳机'),
+    ('机械键盘', 25900, 40, '数码', 0, NULL, NULL, 'RGB机械键盘'),
+    ('保温杯', 4900, 120, '家居', 0, NULL, NULL, '316不锈钢保温杯'),
+    ('运动手环', 9900, 60, '数码', 1, DATE_SUB(NOW(), INTERVAL 1 HOUR), 20, '心率运动手环 (秒杀 8 折)'),
+    ('棉柔毛巾', 1990, 200, '家居', 0, NULL, NULL, '纯棉毛巾两条装');
 
 -- Demo orders spread across statuses + the last 6 months of paid_at (2026-03..2026-08).
 -- Mix of PAID/SHIPPED/DELIVERED/COMPLETED/REFUNDED/CANCELLED. paid_in_cents = paid amount
