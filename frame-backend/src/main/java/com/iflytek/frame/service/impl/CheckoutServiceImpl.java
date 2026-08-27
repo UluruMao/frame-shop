@@ -174,11 +174,17 @@ public class CheckoutServiceImpl implements CheckoutService {
         int totalInCents = Money.subtotalCentsFlashLive(byId, qtyByProduct,
                 new HashSet<>(liveFlashIds));
 
-        // 5. LPUSH to orders:pending + set order_status = queued, return 202.
+        // 5. XADD to orders:pending Stream + set order_status = queued, return 202.
+        // XADD (not LPUSH) so the consumer group's at-least-once delivery holds: a message
+        // is only removed (XACK'd) after the consumer's DB transaction commits. A consumer
+        // crash mid-flight leaves the entry in its PEL for redelivery (no message loss).
         Long orderId = ORDER_SEQ.incrementAndGet();
         String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct,
                 useCoins, validatedCoinAmount, new HashSet<>(liveFlashIds));
-        redis.opsForList().leftPush(RedisKeys.ordersPending(), payload);
+        redis.opsForStream().add(
+                org.springframework.data.redis.connection.stream.Record
+                        .<String, String, String>of(Map.of("payload", payload))
+                        .withStreamKey(RedisKeys.ordersPending()));
         redis.opsForValue().set(RedisKeys.orderStatus(orderId), "queued");
         return new CheckoutResponse(orderId, "queued");
     }

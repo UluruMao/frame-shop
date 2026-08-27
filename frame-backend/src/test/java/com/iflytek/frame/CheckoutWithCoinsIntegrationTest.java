@@ -53,24 +53,43 @@ class CheckoutWithCoinsIntegrationTest {
 
     /**
      * Drain any leftover payloads queued by earlier tests OR prior JVM runs. The
-     * {@code orders:pending} Redis List is shared across the whole suite and never cleaned
+     * {@code orders:pending} Redis Stream is shared across the whole suite and never cleaned
      * between tests; a stale payload from a prior JVM run could even share this test's
      * correlation id ({@code CheckoutServiceImpl.ORDER_SEQ} is seeded from
-     * {@code System.currentTimeMillis()*1000}, so a fresh JVM can reissue a prior corrId). RPOP
-     * the list empty, give the {@code @Scheduled} consumer a beat to finish any in-flight
-     * payload it already RPOP'd, then drain again so THIS test's checkout isn't preceded (or
-     * racing) with a stale payload that could map its corrId to an old order.
+     * {@code System.currentTimeMillis()*1000}, so a fresh JVM can reissue a prior corrId). XREAD
+     * (no consumer group) + XDEL each leftover entry until the stream is empty, give the
+     * {@code @Scheduled} consumer a beat to finish any in-flight XREADGROUP'd payload, then
+     * drain again so THIS test's checkout isn't preceded (or racing) with a stale payload that
+     * could map its corrId to an old order.
      */
     @org.junit.jupiter.api.BeforeEach
     void clearPendingQueue() throws InterruptedException {
         drainOrdersPending();
-        Thread.sleep(150); // let the @Scheduled consumer finish any in-flight RPOP'd payload
+        Thread.sleep(150); // let the @Scheduled consumer finish any in-flight XREADGROUP'd payload
         drainOrdersPending();
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void drainOrdersPending() {
-        while (redis.opsForList().rightPop("orders:pending") != null) {
-            // RPOP until the list is empty
+        // XREAD (no consumer group) to peek leftover entries, then XDEL them so they're never
+        // processed (avoids a stale payload's DB write interfering with this test). The consumer
+        // group tracks via $ (lastConsumed) so XDEL'd entries simply vanish from the stream.
+        try {
+            while (true) {
+                var recs = redis.opsForStream().read(
+                        org.springframework.data.redis.connection.stream.StreamReadOptions.empty().count(100),
+                        org.springframework.data.redis.connection.stream.StreamOffset.create(
+                                "orders:pending",
+                                org.springframework.data.redis.connection.stream.ReadOffset.from("0")));
+                if (recs == null || recs.isEmpty()) break;
+                java.util.List<org.springframework.data.redis.connection.stream.RecordId> ids =
+                        new java.util.ArrayList<>();
+                for (var rec : recs) ids.add(rec.getId());
+                redis.opsForStream().delete("orders:pending",
+                        ids.toArray(new org.springframework.data.redis.connection.stream.RecordId[0]));
+            }
+        } catch (Exception ignored) {
+            // stream absent on a fresh run → nothing to drain
         }
     }
 

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.ListOperations;
+import org.springframework.data.redis.core.StreamOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -31,7 +31,7 @@ import static org.mockito.Mockito.*;
  * Unit tests for the async hot-path checkout (Taobao seckill model).
  *
  * <p>The hot path: aggregate → {@code selectBatchIds} (server-side price) → Redis Lua gate
- * ({@code tryClaimStock}) → compute total → LPUSH to {@code orders:pending} → set
+ * ({@code tryClaimStock}) → compute total → XADD to {@code orders:pending} Stream → set
  * {@code order_status:{id}="queued"} → return 202. No DB writes in the hot path.
  */
 @ExtendWith(MockitoExtension.class)
@@ -40,7 +40,8 @@ class CheckoutServiceImplTest {
     @Mock StringRedisTemplate redis;
     @Mock ProductMapper productMapper;
     @Mock StockGateService stockGateService;
-    @Mock ListOperations<String, String> listOps;
+    @Mock CoinService coinService;
+    @Mock StreamOperations<String, String, String> streamOps;
     @Mock ValueOperations<String, String> valueOps;
     @InjectMocks CheckoutServiceImpl checkoutService;
 
@@ -70,14 +71,14 @@ class CheckoutServiceImplTest {
         p.setStock(5);
         p.setFlashSale(false);
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
-        when(redis.opsForList()).thenReturn(listOps);
+        doReturn(streamOps).when(redis).opsForStream();
         when(redis.opsForValue()).thenReturn(valueOps);
 
         CheckoutResponse resp = checkoutService.checkout(req("key-noflash"), 7L);
 
         assertThat(resp.getStatus()).isEqualTo("queued");
         verify(stockGateService, never()).tryClaimStock(anyList(), anyList());
-        verify(listOps).leftPush(eq("orders:pending"), any());
+        verify(redis).opsForStream();
     }
 
     @Test
@@ -91,7 +92,7 @@ class CheckoutServiceImplTest {
         // stock:{id} exists (sale live) but seckill:{id}:{user} does NOT (not yet purchased).
         when(redis.hasKey("stock:1")).thenReturn(true);
         when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("OK");
-        when(redis.opsForList()).thenReturn(listOps);
+        doReturn(streamOps).when(redis).opsForStream();
         when(redis.opsForValue()).thenReturn(valueOps);
 
         CheckoutResponse resp = checkoutService.checkout(req("key-1"), 7L);
@@ -99,7 +100,7 @@ class CheckoutServiceImplTest {
         assertThat(resp.getStatus()).isEqualTo("queued");
         assertThat(resp.getOrderId()).isNotNull();
         verify(stockGateService).tryClaimStock(List.of(1L), List.of(2));
-        verify(listOps).leftPush(eq("orders:pending"), any());
+        verify(redis).opsForStream();
         verify(valueOps).set(startsWith("order_status:"), eq("queued"));
     }
 
@@ -117,7 +118,7 @@ class CheckoutServiceImplTest {
         assertThatThrownBy(() -> checkoutService.checkout(req("key-2"), 7L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("code").isEqualTo(409);
-        verify(redis, never()).opsForList();
+        verify(redis, never()).opsForStream();
     }
 
     @Test
@@ -131,7 +132,7 @@ class CheckoutServiceImplTest {
         p.setFlashSale(true);
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
         when(redis.hasKey("stock:1")).thenReturn(false); // sale not open → dbOnly, no gate
-        when(redis.opsForList()).thenReturn(listOps);
+        doReturn(streamOps).when(redis).opsForStream();
         when(redis.opsForValue()).thenReturn(valueOps);
 
         CheckoutResponse resp = checkoutService.checkout(req("key-2b"), 7L);
@@ -195,7 +196,7 @@ class CheckoutServiceImplTest {
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
         when(redis.hasKey("stock:1")).thenReturn(true);
         when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("OK");
-        when(redis.opsForList()).thenReturn(listOps);
+        doReturn(streamOps).when(redis).opsForStream();
         when(redis.opsForValue()).thenReturn(valueOps);
 
         CheckoutResponse resp = checkoutService.checkout(r, 7L);

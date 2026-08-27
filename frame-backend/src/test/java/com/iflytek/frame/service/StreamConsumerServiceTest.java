@@ -1,6 +1,7 @@
 package com.iflytek.frame.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.iflytek.frame.common.DistributedLock;
 import com.iflytek.frame.entity.Order;
 import com.iflytek.frame.mapper.OrderItemMapper;
 import com.iflytek.frame.mapper.OrderMapper;
@@ -35,6 +36,7 @@ class StreamConsumerServiceTest {
     @Mock StockGateService stockGateService;
     @Mock CoinService coinService;
     @Mock ProductService productService;
+    @Mock DistributedLock lock;
     @Mock ValueOperations<String, String> valueOps;
 
     private StreamConsumerService service;
@@ -42,7 +44,7 @@ class StreamConsumerServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StreamConsumerService(redis, orderMapper, orderItemMapper, productMapper, stockGateService, coinService, productService);
+        service = new StreamConsumerService(redis, orderMapper, orderItemMapper, productMapper, stockGateService, coinService, productService, lock);
         TransactionSynchronizationManager.initSynchronization();
     }
 
@@ -57,8 +59,10 @@ class StreamConsumerServiceTest {
     void process_genuineIdempotencyDup_skips() {
         String payload = buildPayload();
 
-        when(orderMapper.insert(any(Order.class)))
-                .thenThrow(new DataIntegrityViolationException("uk_idempotency_key"));
+        // The consumer pre-checks the idempotency key BEFORE attempting the insert (Finding 2 fix):
+        // a redelivered message's order already exists → selectByIdempotencyKey finds it →
+        // ack-and-skip (return) without ever calling orderMapper.insert (avoiding the tx-poisoning
+        // DataIntegrityViolationException). So we stub selectByIdempotencyKey, NOT insert.
         Order existing = new Order();
         existing.setId(42L);
         when(orderMapper.selectByIdempotencyKey("idem-1")).thenReturn(existing);
