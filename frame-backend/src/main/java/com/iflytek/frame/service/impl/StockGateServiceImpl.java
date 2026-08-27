@@ -1,6 +1,7 @@
 package com.iflytek.frame.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.iflytek.frame.common.DistributedLock;
 import com.iflytek.frame.common.RedisKeys;
 import com.iflytek.frame.common.ResultCode;
 import com.iflytek.frame.entity.Product;
@@ -19,8 +20,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scripting.support.ResourceScriptSource;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -30,8 +33,17 @@ public class StockGateServiceImpl implements StockGateService {
 
     private static final Logger log = LoggerFactory.getLogger(StockGateServiceImpl.class);
 
+    /**
+     * Per-instance stable id used as the distributed-lock owner. Read once at class-load from
+     * the {@code HOSTNAME} env var (set by the container runtime); falls back to a UUID that is
+     * stable for the JVM's lifetime. Same approach on {@link com.iflytek.frame.service.OrderLifecycleScheduler}.
+     */
+    private static final String INSTANCE_ID =
+            System.getenv().getOrDefault("HOSTNAME", "instance-" + UUID.randomUUID());
+
     private final StringRedisTemplate redis;
     private final ProductMapper productMapper;
+    private final DistributedLock lock;
 
     private RedisScript<String> stockGateScript;
 
@@ -91,36 +103,48 @@ public class StockGateServiceImpl implements StockGateService {
      * never re-loaded mid-flight (which would reset Redis stock to DB stock,
      * losing decrements). {@code @Scheduled} is enabled by
      * {@code @EnableScheduling} on {@link com.iflytek.frame.FrameBackendApplication}.
+     *
+     * <p>Leader election: only the instance that wins the {@code shedlock:openDueFlashSales}
+     * Redis lock (SET NX EX, ttl 20s — slightly above the 10s cadence) runs the tick; the
+     * others skip. Lock released in {@code finally} via Lua compare-and-delete so an expired
+     * lock is never released by a slow/stale owner.
      */
     @Scheduled(fixedRate = 10_000)
     public void openDueFlashSales() {
-        // NOTE: plain QueryWrapper (not LambdaQueryWrapper) by design. The entity field is
-        // `boolean isFlashSale`; a LambdaQueryWrapper would reference Product::isFlashSale,
-        // but MyBatis-Plus's lambda resolver strips the `is` prefix from a boolean getter,
-        // looks up property `flashSale` in the lambda cache, and MISSES (the field/column is
-        // isFlashSale/is_flash_sale) → MybatisPlusException, swallowed by the catch below,
-        // silently no-opping the scheduler (flash sales never auto-open). Column-string
-        // form has no property-name resolution step, so it can't hit that ambiguity.
-        // Regression test: FlashSaleSchedulerIntegrationTest (real MariaDB, not mocked mapper).
-        QueryWrapper<Product> wrapper = new QueryWrapper<>();
-        wrapper.eq("is_flash_sale", true).le("flash_sale_at", LocalDateTime.now());
-        List<Product> due;
-        try {
-            due = productMapper.selectList(wrapper);
-        } catch (Exception e) {
-            log.warn("Flash-sale scheduler DB scan failed: {}", e.getMessage());
-            return;
+        if (!lock.tryLock("shedlock:openDueFlashSales", INSTANCE_ID, Duration.ofSeconds(20))) {
+            return; // another instance is the leader for this tick
         }
-        for (Product p : due) {
-            String key = RedisKeys.stock(p.getId());
+        try {
+            // NOTE: plain QueryWrapper (not LambdaQueryWrapper) by design. The entity field is
+            // `boolean isFlashSale`; a LambdaQueryWrapper would reference Product::isFlashSale,
+            // but MyBatis-Plus's lambda resolver strips the `is` prefix from a boolean getter,
+            // looks up property `flashSale` in the lambda cache, and MISSES (the field/column is
+            // isFlashSale/is_flash_sale) → MybatisPlusException, swallowed by the catch below,
+            // silently no-opping the scheduler (flash sales never auto-open). Column-string
+            // form has no property-name resolution step, so it can't hit that ambiguity.
+            // Regression test: FlashSaleSchedulerIntegrationTest (real MariaDB, not mocked mapper).
+            QueryWrapper<Product> wrapper = new QueryWrapper<>();
+            wrapper.eq("is_flash_sale", true).le("flash_sale_at", LocalDateTime.now());
+            List<Product> due;
             try {
-                if (Boolean.FALSE.equals(redis.hasKey(key))) {
-                    log.info("Auto-opening flash sale for product {} (flashSaleAt={})", p.getId(), p.getFlashSaleAt());
-                    loadStock(p.getId());
-                }
+                due = productMapper.selectList(wrapper);
             } catch (Exception e) {
-                log.warn("Flash-sale scheduler failed to open product {}: {}", p.getId(), e.getMessage());
+                log.warn("Flash-sale scheduler DB scan failed: {}", e.getMessage());
+                return;
             }
+            for (Product p : due) {
+                String key = RedisKeys.stock(p.getId());
+                try {
+                    if (Boolean.FALSE.equals(redis.hasKey(key))) {
+                        log.info("Auto-opening flash sale for product {} (flashSaleAt={})", p.getId(), p.getFlashSaleAt());
+                        loadStock(p.getId());
+                    }
+                } catch (Exception e) {
+                    log.warn("Flash-sale scheduler failed to open product {}: {}", p.getId(), e.getMessage());
+                }
+            }
+        } finally {
+            lock.unlock("shedlock:openDueFlashSales", INSTANCE_ID);
         }
     }
 }

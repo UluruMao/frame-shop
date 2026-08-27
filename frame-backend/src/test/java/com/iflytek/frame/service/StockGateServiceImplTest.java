@@ -1,6 +1,7 @@
 package com.iflytek.frame.service;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.iflytek.frame.common.DistributedLock;
 import com.iflytek.frame.entity.Product;
 import com.iflytek.frame.mapper.ProductMapper;
 import com.iflytek.frame.service.impl.StockGateServiceImpl;
@@ -12,12 +13,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -39,6 +43,7 @@ class StockGateServiceImplTest {
     @Mock StringRedisTemplate redis;
     @Mock ProductMapper productMapper;
     @Mock ValueOperations<String, String> valueOps;
+    @Mock DistributedLock lock;
     @InjectMocks StockGateServiceImpl stockGateService;
 
     @Test
@@ -89,6 +94,9 @@ class StockGateServiceImplTest {
 
     @Test
     void openDueFlashSales_opensSaleWhenStockKeyAbsent() {
+        // leader-election lock acquired → body runs (default false would skip it)
+        when(lock.tryLock(eq("shedlock:openDueFlashSales"), anyString(), any(Duration.class)))
+                .thenReturn(true);
         // A flash-sale product whose flashSaleAt is in the past → due to open.
         Product due = new Product();
         due.setId(10L);
@@ -109,6 +117,9 @@ class StockGateServiceImplTest {
 
     @Test
     void openDueFlashSales_skipsSaleAlreadyOpen() {
+        // leader-election lock acquired → body runs
+        when(lock.tryLock(eq("shedlock:openDueFlashSales"), anyString(), any(Duration.class)))
+                .thenReturn(true);
         Product due = new Product();
         due.setId(11L);
         due.setFlashSale(true);
@@ -127,6 +138,9 @@ class StockGateServiceImplTest {
 
     @Test
     void openDueFlashSales_noDueProducts_doesNothing() {
+        // leader-election lock acquired → body runs (but the query returns no products)
+        when(lock.tryLock(eq("shedlock:openDueFlashSales"), anyString(), any(Duration.class)))
+                .thenReturn(true);
         when(productMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
 
         stockGateService.openDueFlashSales();
