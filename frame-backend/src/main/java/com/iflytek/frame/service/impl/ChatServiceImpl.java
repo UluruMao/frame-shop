@@ -116,6 +116,14 @@ public class ChatServiceImpl implements ChatService {
         return sessions.stream().map(this::toSessionVO).toList();
     }
 
+    @Override
+    @Transactional
+    public void deleteSession(Long sessionId, Long userId) {
+        ChatSession session = loadAndCheckOwnership(sessionId, userId); // throws FORBIDDEN if not owner
+        session.setStatus("DELETED");
+        sessionMapper.updateById(session);
+    }
+
     private ChatSession loadAndCheckOwnership(Long sessionId, Long userId) {
         ChatSession session = sessionMapper.selectById(sessionId);
         if (session == null) {

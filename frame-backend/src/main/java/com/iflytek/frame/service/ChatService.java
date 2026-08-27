@@ -16,4 +16,6 @@ public interface ChatService {
     /** Admin-facing history: no ownership check (admins can read any session). */
     PageResult<ChatMessageVO> history(Long sessionId, PageQuery query);
     List<ChatSessionVO> openSessions(); // admin inbox
+    /** Soft-delete a session (status=DELETED), owner-only. Hidden from both inboxes; messages retained. */
+    void deleteSession(Long sessionId, Long userId);
 }

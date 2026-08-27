@@ -316,7 +316,11 @@ public class StreamConsumerService {
                 oi.setOrderId(order.getId());
                 oi.setProductId(pid);
                 oi.setName(p.getName());
-                oi.setPriceInCents(p.getPriceInCents());
+                // Snapshot the effective price actually paid for this item (flash-discounted when
+                // live, list price otherwise) — consistent with order.total_in_cents which carries
+                // the flash-discounted total. Fixes the Task 6 finding where the LIST price was
+                // snapshotted here, diverging from the discounted paid total for flash items.
+                oi.setPriceInCents(Money.flashPriceInCents(p));
                 oi.setQuantity(qty);
                 orderItemMapper.insert(oi);
                 redis.opsForValue().set(RedisKeys.seckill(pid, userId), "1",

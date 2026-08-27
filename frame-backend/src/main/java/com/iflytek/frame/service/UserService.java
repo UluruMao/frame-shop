@@ -34,4 +34,7 @@ public interface UserService {
      *  Replaces the 4× inline {@code u == null || !u.getId().equals(userId)} dance
      *  in PhoneRebind/Profile/Password services. */
     User requireUserMatching(String username, Long userId);
+
+    /** Soft-delete: anonymize PII, null password (un-loginable), status=DELETED. Retains id + orders. */
+    void deactivateAccount(Long userId);
 }

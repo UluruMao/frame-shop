@@ -1,6 +1,9 @@
 package com.iflytek.frame.controller;
 
 import com.iflytek.frame.common.Role;
+import com.iflytek.frame.entity.User;
+import com.iflytek.frame.mapper.UserMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,7 +46,44 @@ class AdminStatsControllerTest {
     @Autowired
     com.iflytek.frame.security.JwtUtil jwtUtil;
 
+    @Autowired
+    UserMapper userMapper;
+
     private final RestClient rest = RestClient.create();
+
+    /**
+     * Seed the synthetic "adminuser" + "plainuser" rows as ACTIVE so the
+     * {@link com.iflytek.frame.security.JwtAuthenticationFilter} (which re-checks
+     * user status on every authenticated request to revoke soft-deleted accounts)
+     * finds non-deleted rows and accepts the JWTs. Idempotent across the shared DB.
+     */
+    @BeforeEach
+    void seedActiveUsers() {
+        seed("adminuser", Role.ADMIN, "13900099002");
+        seed("plainuser", Role.USER, "13900099001");
+    }
+
+    private void seed(String username, Role role, String phone) {
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User> qw =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User>()
+                        .eq(User::getUsername, username);
+        User existing = userMapper.selectOne(qw);
+        if (existing == null) {
+            User u = new User();
+            u.setUsername(username);
+            u.setPasswordHash("$2a$10$placeholderhashforintegrationtestonly");
+            u.setRole(role);
+            u.setPhone(phone);
+            u.setStatus("ACTIVE");
+            u.setFailedAttempts(0);
+            userMapper.insert(u);
+        } else if (!"ACTIVE".equals(existing.getStatus())) {
+            User upd = new User();
+            upd.setId(existing.getId());
+            upd.setStatus("ACTIVE");
+            userMapper.updateById(upd);
+        }
+    }
 
     /**
      * An ADMIN-role JWT calling GET /admin/stats must succeed (200) and return

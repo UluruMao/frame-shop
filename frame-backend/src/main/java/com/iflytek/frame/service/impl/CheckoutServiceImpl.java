@@ -148,9 +148,9 @@ public class CheckoutServiceImpl implements CheckoutService {
             default -> throw new BusinessException(ResultCode.CONFLICT, "sold out");
         }
 
-        // 4. Compute total from DB prices.
+        // 4. Compute total from DB prices (flash items use the discounted flash price).
         Map<Long, Product> byId = products.stream().collect(Collectors.toMap(Product::getId, p -> p));
-        int totalInCents = Money.subtotalCents(byId, qtyByProduct);
+        int totalInCents = Money.subtotalCentsFlash(byId, qtyByProduct);
 
         // 5. LPUSH to orders:pending + set order_status = queued, return 202.
         Long orderId = ORDER_SEQ.incrementAndGet();

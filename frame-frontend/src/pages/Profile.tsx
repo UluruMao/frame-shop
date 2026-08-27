@@ -1,12 +1,14 @@
 import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react'
-import { User as UserIcon, Phone, KeyRound, Upload } from 'lucide-react'
-import { fetchMe, changePassword } from '@/api/auth'
+import { useNavigate } from 'react-router-dom'
+import { User as UserIcon, Phone, KeyRound, Upload, Trash2 } from 'lucide-react'
+import { fetchMe, changePassword, deleteAccount } from '@/api/auth'
 import { updateProfile, uploadAvatar, rebindInit, rebindVerifyOld, rebindConfirm } from '@/api/profile'
 import { useAuthStore } from '@/store/useAuthStore'
 import type { UserProfile } from '@/api/types'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Card from '@/components/ui/Card'
+import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 
 /**
@@ -36,6 +38,13 @@ export default function Profile() {
   const [msg, setMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const user = useAuthStore((s) => s.user)
+
+  // Account self-deletion (danger zone) state
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteStep, setDeleteStep] = useState<'confirm' | 'password'>('confirm')
+  const [delPw, setDelPw] = useState('')
+  const navigate = useNavigate()
+  const clear = useAuthStore((s) => s.clear)
 
   useEffect(() => {
     void (async () => {
@@ -205,6 +214,50 @@ export default function Profile() {
           </Button>
         </form>
       </Card>
+
+      {/* Danger zone — account self-deletion (soft delete) */}
+      <Card className="p-5 space-y-4 border-red-200">
+        <div className="flex items-center gap-2">
+          <Trash2 className="w-4 h-4 text-red-600" />
+          <h2 className="text-sm font-semibold text-slate-700">注销账号</h2>
+        </div>
+        <p className="text-xs text-slate-500">注销后将无法登录。您的订单和消费记录将保留用于统计。</p>
+        <Button variant="secondary" className="text-red-600" onClick={() => { setDeleteOpen(true); setDeleteStep('confirm'); setDelPw('') }}>
+          注销账号
+        </Button>
+      </Card>
+
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="确认注销">
+        {deleteStep === 'confirm' ? (
+          <>
+            <p className="text-sm text-slate-600">此操作不可逆。您的订单和消费记录将保留，但您将无法再登录此账号。</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDeleteOpen(false)}>取消</Button>
+              <Button variant="primary" className="bg-red-600" onClick={() => setDeleteStep('password')}>继续</Button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={async (e) => {
+            e.preventDefault()
+            setError(null); setLoading(true)
+            try {
+              await deleteAccount(delPw)
+            } catch (err) {
+              setError(err instanceof Error ? err.message : '注销失败')
+              return
+            } finally {
+              setLoading(false)
+            }
+            clear(); setDeleteOpen(false); navigate('/login', { replace: true })
+          }} className="space-y-3">
+            <Input type="password" placeholder="登录密码" value={delPw} onChange={(e) => setDelPw(e.target.value)} required />
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDeleteOpen(false)}>取消</Button>
+              <Button type="submit" loading={loading} className="bg-red-600">确认注销</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   )
 }

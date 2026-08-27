@@ -30,3 +30,6 @@ export async function adminInbox(): Promise<ChatSessionVO[]> {
 export async function adminHistory(sessionId: number, current = 1, size = 50): Promise<{ records: ChatMessageVO[]; total: number }> {
   return request.get(`/admin/chat/sessions/${sessionId}/messages`, { params: { current, size } })
 }
+export async function deleteSession(sessionId: number): Promise<void> {
+  return request.delete(`/chat/sessions/${sessionId}`)
+}

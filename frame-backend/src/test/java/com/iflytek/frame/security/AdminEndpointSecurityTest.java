@@ -1,6 +1,9 @@
 package com.iflytek.frame.security;
 
 import com.iflytek.frame.common.Role;
+import com.iflytek.frame.entity.User;
+import com.iflytek.frame.mapper.UserMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,7 +45,41 @@ class AdminEndpointSecurityTest {
     @Autowired
     JwtUtil jwtUtil;
 
+    @Autowired
+    UserMapper userMapper;
+
     private final RestClient rest = RestClient.create();
+
+    /**
+     * Seed the synthetic "plainuser" into the DB as ACTIVE so the
+     * {@link JwtAuthenticationFilter} (which re-checks the user's status on every
+     * authenticated request to revoke soft-deleted accounts) finds a non-deleted
+     * row and accepts the JWT. The JWT's userId claim (99001) is not verified
+     * against the DB row's id by the filter — only username + status matter.
+     * Idempotent: if the row already exists (shared DB across runs), re-assert
+     * ACTIVE in case a prior run left it DELETED.
+     */
+    @BeforeEach
+    void seedActiveUser() {
+        User existing = userMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User>()
+                        .eq(User::getUsername, "plainuser"));
+        if (existing == null) {
+            User u = new User();
+            u.setUsername("plainuser");
+            u.setPasswordHash("$2a$10$placeholderhashforintegrationtestonly");
+            u.setRole(Role.USER);
+            u.setPhone("13900099001");
+            u.setStatus("ACTIVE");
+            u.setFailedAttempts(0);
+            userMapper.insert(u);
+        } else if (!"ACTIVE".equals(existing.getStatus())) {
+            User upd = new User();
+            upd.setId(existing.getId());
+            upd.setStatus("ACTIVE");
+            userMapper.updateById(upd);
+        }
+    }
 
     /**
      * A USER-role JWT (authenticated, but non-admin) calling an admin endpoint

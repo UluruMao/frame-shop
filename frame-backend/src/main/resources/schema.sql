@@ -58,6 +58,7 @@ CREATE TABLE `product` (
     `category`      VARCHAR(64)  DEFAULT NULL,
     `is_flash_sale` TINYINT(1)   NOT NULL DEFAULT 0,
     `flash_sale_at` DATETIME     DEFAULT NULL,
+    `discount_percent` INT       DEFAULT NULL,
     `description`   VARCHAR(512) DEFAULT NULL,
     `create_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

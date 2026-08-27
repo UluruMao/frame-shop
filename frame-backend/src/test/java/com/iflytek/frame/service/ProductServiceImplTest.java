@@ -187,4 +187,65 @@ class ProductServiceImplTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> productService.getDetail(999999L))
                 .isInstanceOf(com.iflytek.frame.exception.BusinessException.class);
     }
+
+    @Test
+    void update_persists_discountPercent_whenFlash() {
+        // Regression for the discount_percent update bug: ProductServiceImpl.update set every
+        // other field on `existing` then called updateById, but never called
+        // setDiscountPercent — so editing a flash product's discount % was silently lost
+        // (old value persisted unchanged because `existing` was loaded with the old value).
+        // This captures the entity actually passed to updateById and asserts discountPercent
+        // reflects the DTO, not the stale loaded value.
+        Product loaded = new Product();
+        loaded.setId(7L);
+        loaded.setName("Old");
+        loaded.setFlashSale(true);
+        loaded.setDiscountPercent(30);   // stale value in DB / loaded entity
+        // getById cache miss → DB
+        when(valueOps.get("product:7")).thenReturn(null);
+        when(productMapper.selectById(7L)).thenReturn(loaded);
+        // stock:{id} absent → no Lua-gate resync
+        when(redis.hasKey("stock:7")).thenReturn(false);
+
+        com.iflytek.frame.dto.ProductDTO dto = new com.iflytek.frame.dto.ProductDTO();
+        dto.setName("Updated");
+        dto.setPriceInCents(1999);
+        dto.setStock(10);
+        dto.setFlashSale(true);
+        dto.setDiscountPercent(40);     // the new value the admin typed
+
+        productService.update(7L, dto);
+
+        org.mockito.ArgumentCaptor<Product> captor = org.mockito.ArgumentCaptor.forClass(Product.class);
+        verify(productMapper).updateById(captor.capture());
+        Product updated = captor.getValue();
+        assertThat(updated.getDiscountPercent()).isEqualTo(40);   // new value persisted, not 30
+    }
+
+    @Test
+    void update_clears_discountPercent_whenNotFlash() {
+        // Toggling isFlashSale off must null out discountPercent so non-flash products never
+        // carry a stale discount (matches ProductDTO.toEntity's `isFlashSale ? discountPercent : null`).
+        Product loaded = new Product();
+        loaded.setId(8L);
+        loaded.setName("Was-Flash");
+        loaded.setFlashSale(true);
+        loaded.setDiscountPercent(30);   // previously a flash product with a discount
+        when(valueOps.get("product:8")).thenReturn(null);
+        when(productMapper.selectById(8L)).thenReturn(loaded);
+        when(redis.hasKey("stock:8")).thenReturn(false);
+
+        com.iflytek.frame.dto.ProductDTO dto = new com.iflytek.frame.dto.ProductDTO();
+        dto.setName("Now-Regular");
+        dto.setPriceInCents(1999);
+        dto.setStock(10);
+        dto.setFlashSale(false);        // admin turns flash OFF
+        dto.setDiscountPercent(30);      // even if the DTO still carries a value, must be cleared
+
+        productService.update(8L, dto);
+
+        org.mockito.ArgumentCaptor<Product> captor = org.mockito.ArgumentCaptor.forClass(Product.class);
+        verify(productMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getDiscountPercent()).isNull();   // cleared
+    }
 }

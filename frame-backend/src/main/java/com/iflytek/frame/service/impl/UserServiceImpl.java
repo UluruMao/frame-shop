@@ -98,6 +98,35 @@ public class UserServiceImpl implements UserService, UserDetailsService {
     }
 
     @Override
+    public void deactivateAccount(Long userId) {
+        // Username must stay unique after deletion: suffix with id so it never collides with a
+        // future registration of the same name. Phone/nickname/avatar/signature are NULLed.
+        //
+        // NOTE: uses an explicit string-based UpdateWrapper (NOT updateById) so the NULL PII
+        // fields are actually persisted. MyBatis-Plus's default FieldStrategy is NOT_NULL, so
+        // updateById silently omits every null field — phone/nickname/avatar_url/signature
+        // would never be cleared. UpdateWrapper.set("col", null) emits a literal SET col=NULL
+        // regardless of the global field strategy, which is the surgical fix for this soft-delete.
+        // String column names (not lambda) are used so this resolves without the MyBatis-Plus
+        // lambda entity cache (only needed for plain unit tests; here we run in full context).
+        //
+        // password_hash is NOT NULL in the schema, so it cannot be set to NULL. Instead set it
+        // to the sentinel "!DELETED!" — not a valid BCrypt hash (BCrypt hashes start with $2),
+        // so passwordEncoder.matches(any, "!DELETED!") always returns false: the account is
+        // permanently un-loginable without violating the NOT NULL constraint.
+        userMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<User>()
+                        .eq("id", userId)
+                        .set("username", "[已注销]" + userId)
+                        .set("password_hash", "!DELETED!")
+                        .set("phone", null)
+                        .set("nickname", null)
+                        .set("avatar_url", null)
+                        .set("signature", null)
+                        .set("status", "DELETED"));
+    }
+
+    @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = findByUsername(username);
         if (user == null) {

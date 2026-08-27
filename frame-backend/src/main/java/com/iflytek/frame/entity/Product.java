@@ -35,5 +35,7 @@ public class Product extends BaseEntity {
     @JsonProperty("isFlashSale")
     private boolean isFlashSale;
     private LocalDateTime flashSaleAt;
+    @Schema(description = "Flash-sale discount percent (1-99); null = no discount even if flash")
+    private Integer discountPercent;
     private String description;
 }

@@ -24,6 +24,25 @@ public final class Money {
         return total;
     }
 
+    /** Effective price for a product: discounted when flash-sale is live, else list price.
+     *  discountPercent null or 0 → no discount (returns list price even if flash). */
+    public static int flashPriceInCents(Product p) {
+        if (!p.isFlashSale() || p.getDiscountPercent() == null || p.getDiscountPercent() <= 0) {
+            return p.getPriceInCents();
+        }
+        return p.getPriceInCents() * (100 - p.getDiscountPercent()) / 100;
+    }
+
+    /** Subtotal using the flash price for live-flash items, list price otherwise. */
+    public static int subtotalCentsFlash(Map<Long, Product> byId, Map<Long, Integer> qty) {
+        int total = 0;
+        for (Map.Entry<Long, Integer> e : qty.entrySet()) {
+            Product p = byId.get(e.getKey());
+            if (p != null) total += flashPriceInCents(p) * e.getValue();
+        }
+        return total;
+    }
+
     /** coins → cents (1:1). Named for symmetry, reads better than a bare cast. */
     public static int coinsToCents(int coins) {
         return coins;

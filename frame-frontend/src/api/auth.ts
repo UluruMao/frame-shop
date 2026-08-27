@@ -29,3 +29,7 @@ export function forgotPassword(phone: string, code: string, newPassword: string)
 export function changePassword(oldPassword: string, newPassword: string): Promise<void> {
   return request.post('/auth/password/change', { oldPassword, newPassword })
 }
+
+export function deleteAccount(password: string): Promise<void> {
+  return request.post('/auth/account/delete', { password })
+}

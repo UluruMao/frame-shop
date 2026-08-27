@@ -1,14 +1,14 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Package, LogOut, Boxes, ShoppingCart, ClipboardList, Shield, User, MessageCircle, Coins } from 'lucide-react'
+import { Package, LogOut, Boxes, ShoppingCart, ClipboardList, Shield, User, MessageCircle, Coins } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 
 type NavItem = { to: string; label: string; icon: typeof Package }
 
-/** Role-aware nav: guest=browse only; user=commerce; admin=dashboard+preview+admin. */
+/** Role-aware nav: guest=browse only; user=commerce; admin=a single link into
+ *  the /admin/* section (admins use AdminLayout, not MainLayout, for their work). */
 function navFor(role: string | undefined): NavItem[] {
   if (role === 'ADMIN') {
     return [
-      { to: '/dashboard', label: '控制台', icon: LayoutDashboard },
       { to: '/products', label: '商品', icon: Package },
       { to: '/admin', label: '管理后台', icon: Shield },
     ]

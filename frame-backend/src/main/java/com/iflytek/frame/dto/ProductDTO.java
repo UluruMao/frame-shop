@@ -3,6 +3,7 @@ package com.iflytek.frame.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.iflytek.frame.entity.Product;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -34,6 +35,9 @@ public class ProductDTO {
     @JsonProperty("isFlashSale")
     private boolean isFlashSale;
     private LocalDateTime flashSaleAt;
+    @Min(value = 1, message = "discountPercent must be 1-99")
+    @Max(value = 99, message = "discountPercent must be 1-99")
+    private Integer discountPercent;
     private String description;
 
     public Product toEntity() {
@@ -46,6 +50,8 @@ public class ProductDTO {
         p.setCategory(category);
         p.setFlashSale(isFlashSale);
         p.setFlashSaleAt(flashSaleAt);
+        // When not a flash sale, clear discountPercent so non-flash products never carry a stale discount.
+        p.setDiscountPercent(isFlashSale ? discountPercent : null);
         p.setDescription(description);
         return p;
     }

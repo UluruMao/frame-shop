@@ -128,6 +128,7 @@ public class SecurityConfig {
                         // user chat REST endpoints (UC011)
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/chat/sessions").hasRole("USER")
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/chat/sessions/**").hasRole("USER")
+                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/chat/sessions/**").hasRole("USER")
                         // admin chat REST endpoints (UC011)
                         .requestMatchers("/admin/chat/**").hasRole("ADMIN")
                         // everything else requires authentication

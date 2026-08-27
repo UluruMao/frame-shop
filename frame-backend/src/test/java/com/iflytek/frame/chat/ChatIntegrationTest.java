@@ -4,8 +4,11 @@ import com.iflytek.frame.common.Role;
 import com.iflytek.frame.dto.ChatMessageRequest;
 import com.iflytek.frame.dto.ChatMessageVO;
 import com.iflytek.frame.dto.ChatSessionVO;
+import com.iflytek.frame.entity.User;
+import com.iflytek.frame.mapper.UserMapper;
 import com.iflytek.frame.security.JwtUtil;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -112,11 +115,51 @@ class ChatIntegrationTest {
     @Autowired
     ObjectMapper objectMapper;
 
+    @Autowired
+    UserMapper userMapper;
+
     /** Spring Boot 4.1 dropped TestRestTemplate; RestClient is the modern HTTP
      *  client. create() wires the default Jackson message converters — but we
      *  only read the body as a raw String and parse it ourselves (see below). */
     private final RestClient rest = RestClient.create();
     private StompSession stompSession;
+
+    /**
+     * Seed the synthetic chat test users as ACTIVE so the
+     * {@link com.iflytek.frame.security.JwtAuthenticationFilter} (which re-checks
+     * user status on every authenticated request to revoke soft-deleted accounts)
+     * finds non-deleted rows and accepts the JWTs. The JWT userId claims
+     * (1001/2001/2002) are not verified against DB ids by the filter — only
+     * username + status. Idempotent across the shared DB.
+     */
+    @BeforeEach
+    void seedActiveUsers() {
+        seedUser("testuser", "13900001001");
+        seedUser("owneruser", "13900002001");
+        seedUser("otheruser", "13900002002");
+    }
+
+    private void seedUser(String username, String phone) {
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User> qw =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User>()
+                        .eq(User::getUsername, username);
+        User existing = userMapper.selectOne(qw);
+        if (existing == null) {
+            User u = new User();
+            u.setUsername(username);
+            u.setPasswordHash("$2a$10$placeholderhashforintegrationtestonly");
+            u.setRole(Role.USER);
+            u.setPhone(phone);
+            u.setStatus("ACTIVE");
+            u.setFailedAttempts(0);
+            userMapper.insert(u);
+        } else if (!"ACTIVE".equals(existing.getStatus())) {
+            User upd = new User();
+            upd.setId(existing.getId());
+            upd.setStatus("ACTIVE");
+            userMapper.updateById(upd);
+        }
+    }
 
     @AfterEach
     void disconnect() {

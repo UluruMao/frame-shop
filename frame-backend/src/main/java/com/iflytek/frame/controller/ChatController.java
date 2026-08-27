@@ -33,4 +33,11 @@ public class ChatController {
         // ownership checked in the service layer (historyForUser) before paginating
         return Result.success(chatService.historyForUser(id, SecurityUtils.currentUserId(), query));
     }
+
+    @Operation(summary = "Delete (soft) the current user's chat session — hidden from both inboxes")
+    @DeleteMapping("/sessions/{id}")
+    public Result<Void> deleteSession(@PathVariable Long id) {
+        chatService.deleteSession(id, SecurityUtils.currentUserId());
+        return Result.success();
+    }
 }
