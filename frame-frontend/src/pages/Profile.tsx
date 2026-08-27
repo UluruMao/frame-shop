@@ -239,7 +239,15 @@ export default function Profile() {
         ) : (
           <form onSubmit={async (e) => {
             e.preventDefault()
-            try { await deleteAccount(delPw) } catch (err) { setError(err instanceof Error ? err.message : '注销失败'); return }
+            setError(null); setLoading(true)
+            try {
+              await deleteAccount(delPw)
+            } catch (err) {
+              setError(err instanceof Error ? err.message : '注销失败')
+              return
+            } finally {
+              setLoading(false)
+            }
             clear(); setDeleteOpen(false); navigate('/login', { replace: true })
           }} className="space-y-3">
             <Input type="password" placeholder="登录密码" value={delPw} onChange={(e) => setDelPw(e.target.value)} required />
