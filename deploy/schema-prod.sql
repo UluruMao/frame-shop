@@ -212,6 +212,8 @@ ALTER TABLE `orders` ADD COLUMN IF NOT EXISTS `cancel_reason`   VARCHAR(256) DEF
 
 -- product: Phase F list-cache + description (description may already exist)
 ALTER TABLE `product` ADD COLUMN IF NOT EXISTS `description` VARCHAR(512) DEFAULT NULL AFTER `flash_sale_at`;
+-- product: flash-sale discount percentage (1-99; null = no discount even if flash)
+ALTER TABLE `product` ADD COLUMN IF NOT EXISTS `discount_percent` INT DEFAULT NULL AFTER `flash_sale_at`;
 
 -- ============================================================================
 -- Dedicated app user (not root) for production
