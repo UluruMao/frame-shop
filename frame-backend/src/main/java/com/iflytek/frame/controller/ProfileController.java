@@ -1,12 +1,14 @@
 package com.iflytek.frame.controller;
 
 import com.iflytek.frame.common.Result;
+import com.iflytek.frame.dto.DeleteAccountRequest;
 import com.iflytek.frame.dto.RebindConfirmRequest;
 import com.iflytek.frame.dto.RebindInitRequest;
 import com.iflytek.frame.dto.RebindVerifyOldRequest;
 import com.iflytek.frame.dto.UpdateProfileRequest;
 import com.iflytek.frame.dto.UserProfile;
 import com.iflytek.frame.entity.User;
+import com.iflytek.frame.service.AccountService;
 import com.iflytek.frame.service.PhoneRebindService;
 import com.iflytek.frame.service.ProfileService;
 import com.iflytek.frame.service.UserService;
@@ -27,6 +29,7 @@ public class ProfileController {
     private final ProfileService profileService;
     private final PhoneRebindService rebindService;
     private final UserService userService;
+    private final AccountService accountService;
 
     @Operation(summary = "Update nickname/signature")
     @PutMapping("/profile")
@@ -63,6 +66,13 @@ public class ProfileController {
     public Result<Void> rebindConfirm(@Valid @RequestBody RebindConfirmRequest req) {
         rebindService.confirm(SecurityUtils.currentUserId(), SecurityUtils.currentUsername(),
                 req.getNewPhone(), req.getCode());
+        return Result.success();
+    }
+
+    @Operation(summary = "Self-delete account (soft delete, password re-auth)")
+    @PostMapping("/account/delete")
+    public Result<Void> deleteAccount(@Valid @RequestBody DeleteAccountRequest req) {
+        accountService.deactivateAccount(SecurityUtils.currentUserId(), SecurityUtils.currentUsername(), req.getPassword());
         return Result.success();
     }
 }
