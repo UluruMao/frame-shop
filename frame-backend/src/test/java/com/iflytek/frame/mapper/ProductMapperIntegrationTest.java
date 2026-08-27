@@ -208,4 +208,33 @@ class ProductMapperIntegrationTest {
         List<String> cats = productMapper.selectDistinctCategories();
         assertThat(cats).containsExactly("tools", "toys");
     }
+
+    @Test
+    void findDetailById_returns_discountPercent_forFlashProduct() {
+        // Regression for the discount_percent read bug: findDetailById SELECTed explicit
+        // columns and omitted discount_percent, so the detail API never returned it — the
+        // frontend edit form's discount field was always EMPTY even when the DB had a value.
+        seedCatalog();
+        // make product 1 a flash product with a 30% discount
+        jdbc.update("UPDATE product SET is_flash_sale=1, discount_percent=30 WHERE id=1");
+
+        ProductDetail d = productMapper.findDetailById(1L);
+        assertThat(d).isNotNull();
+        assertThat(d.getDiscountPercent()).isEqualTo(30);
+    }
+
+    @Test
+    void pageProducts_returns_discountPercent_forFlashProduct() {
+        // Regression for the discount_percent list/read bug: pageProducts SELECTed explicit
+        // columns and the productListItemMap resultMap omitted discount_percent, so the list
+        // API never returned it.
+        seedCatalog();
+        // make product 2 a flash product with a 25% discount
+        jdbc.update("UPDATE product SET is_flash_sale=1, discount_percent=25 WHERE id=2");
+
+        List<ProductListItem> r = productMapper.pageProducts(new Page<>(1, 50),
+                q(null, " DESC", null, null)).getRecords();
+        ProductListItem blue = r.stream().filter(p -> "Blue Gadget".equals(p.getName())).findFirst().orElseThrow();
+        assertThat(blue.getDiscountPercent()).isEqualTo(25);
+    }
 }

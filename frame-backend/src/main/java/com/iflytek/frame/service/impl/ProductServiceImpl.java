@@ -168,6 +168,9 @@ public class ProductServiceImpl implements ProductService {
         existing.setCategory(dto.getCategory());
         existing.setFlashSale(dto.isFlashSale());
         existing.setFlashSaleAt(dto.getFlashSaleAt());
+        // Apply the same isFlashSale-gated rule as ProductDTO.toEntity: when flash is turned
+        // off, null out discountPercent so non-flash products never carry a stale discount.
+        existing.setDiscountPercent(dto.isFlashSale() ? dto.getDiscountPercent() : null);
         existing.setDescription(dto.getDescription());
         mapper.updateById(existing);
         redis.delete(RedisKeys.product(id));

@@ -28,6 +28,7 @@
         <result property="category" column="category"/>
         <result property="isFlashSale" column="is_flash_sale"/>
         <result property="flashSaleAt" column="flash_sale_at"/>
+        <result property="discountPercent" column="discount_percent"/>
         <result property="description" column="description"/>
         <result property="createTime" column="create_time"/>
         <result property="updateTime" column="update_time"/>
@@ -52,7 +53,8 @@
 
     <select id="pageProducts" resultMap="productListItemMap">
         SELECT p.id, p.name, p.price_in_cents, p.stock, p.image_url, p.category,
-               p.is_flash_sale, p.flash_sale_at, p.description, p.create_time, p.update_time,
+               p.is_flash_sale, p.flash_sale_at, p.discount_percent, p.description,
+               p.create_time, p.update_time,
                COALESCE(s.sold, 0) AS sold,
                COALESCE(r.avg_rating, 0) AS avg_rating
         <include refid="catalogFrom"/>
@@ -74,7 +76,8 @@
 
     <select id="findDetailById" resultType="com.iflytek.frame.dto.ProductDetail">
         SELECT p.id, p.name, p.price_in_cents, p.stock, p.image_url, p.category,
-               p.is_flash_sale, p.flash_sale_at, p.description, p.create_time, p.update_time,
+               p.is_flash_sale, p.flash_sale_at, p.discount_percent, p.description,
+               p.create_time, p.update_time,
                COALESCE(s.sold, 0) AS sold,
                COALESCE(r.avg_rating, 0) AS avg_rating
         <include refid="catalogFrom"/>
