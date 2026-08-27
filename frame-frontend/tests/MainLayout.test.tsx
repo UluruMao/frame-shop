@@ -33,12 +33,14 @@ describe('MainLayout nav', () => {
     expect(screen.queryByText('管理后台')).not.toBeInTheDocument()
   })
 
-  it('shows Dashboard + 商品 + 管理后台 for an admin (no commerce menus)', () => {
+  it('shows 商品 + 管理后台 for an admin (admins use AdminLayout, not MainLayout, for their work)', () => {
     useAuthStore.setState({ token: 't', user: { userId: 1, username: 'a', role: 'ADMIN' } })
     renderAt('/')
-    expect(screen.getByText('控制台')).toBeInTheDocument()
     expect(screen.getByText('商品')).toBeInTheDocument()
     expect(screen.getByText('管理后台')).toBeInTheDocument()
+    // Admins no longer get the commerce menus or a Dashboard link here — those
+    // live in AdminLayout under /admin/*.
     expect(screen.queryByText('订单')).not.toBeInTheDocument()
+    expect(screen.queryByText('控制台')).not.toBeInTheDocument()
   })
 })

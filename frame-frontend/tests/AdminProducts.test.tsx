@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import Admin from '@/pages/Admin'
+import AdminProducts from '@/pages/admin/AdminProducts'
 
 vi.mock('@/store/useAuthStore', () => ({
   useIsAdmin: () => true,
@@ -16,7 +16,7 @@ vi.mock('@/api/product', () => ({
 
 describe('Admin product flash percentage', () => {
   it('shows flash preview and gates submit behind two-step confirm', async () => {
-    render(<Admin />)
+    render(<AdminProducts />)
     await waitFor(() => expect(screen.getByPlaceholderText('名称')).toBeInTheDocument())
 
     fireEvent.change(screen.getByPlaceholderText('名称'), { target: { value: 'Item' } })
