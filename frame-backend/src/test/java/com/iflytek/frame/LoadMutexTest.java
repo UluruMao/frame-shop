@@ -62,6 +62,10 @@ class LoadMutexTest {
         p.setName("Mutex Widget");
         p.setPriceInCents(100);
         p.setStock(K);
+        // Flash sale: the Redis Lua gate (burst-shield) applies ONLY to flash-live items.
+        // loadStock below opens the sale (stock:{id} in Redis), so this product routes
+        // through the gate → exactly K of M buyers succeed, rest get 409 sold out.
+        p.setFlashSale(true);
         productMapper.insert(p);
         // load stock into Redis (open the sale) — required before checkout can claim.
         // The Lua gate reads stock:{pid} from Redis; without this ALL checkouts fail sold-out.

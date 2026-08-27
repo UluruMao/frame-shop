@@ -221,6 +221,7 @@ public class StreamConsumerService {
         JsonNode itemsNode;
         boolean useCoins;
         int coinAmount;
+        java.util.Set<Long> liveFlashIds = new java.util.HashSet<>();
 
         try {
             JsonNode node = objectMapper.readTree(payload);
@@ -244,6 +245,13 @@ public class StreamConsumerService {
             JsonNode coinAmountNode = node.get("coinAmount");
             coinAmount = coinAmountNode != null && !coinAmountNode.isNull() ? coinAmountNode.asInt() : 0;
             itemsNode = node.get("items");
+            // liveFlashIds: which items were live-flash at checkout time (got the discount +
+            // the Redis gate). Tolerate absence for payloads queued before this field existed
+            // — older payloads treated every flash item as live-flash, so default to that.
+            JsonNode liveFlashNode = node.get("liveFlashIds");
+            if (liveFlashNode != null && liveFlashNode.isArray()) {
+                for (JsonNode lf : liveFlashNode) liveFlashIds.add(lf.asLong());
+            }
         } catch (Exception parseEx) {
             log.error("poison payload: unparseable, skipping", parseEx);
             return;
@@ -305,7 +313,12 @@ public class StreamConsumerService {
                     orderMapper.updateById(order);
                     redis.opsForValue().set(RedisKeys.orderIdMap(String.valueOf(payloadOrderId)),
                             String.valueOf(order.getId()));
-                    stockGateService.recredit(pid, qty);
+                    // Only live-flash items had Redis stock decremented by the Lua gate;
+                    // recredit Redis for those (dbOnly items only touched DB, which rolls
+                    // back via @Transactional).
+                    if (liveFlashIds.contains(pid)) {
+                        stockGateService.recredit(pid, qty);
+                    }
                     redis.delete(RedisKeys.seckill(pid, userId));
                     redis.opsForValue().set(RedisKeys.orderStatus(payloadOrderId), "failed");
                     invalidateListCacheSafe();
@@ -316,15 +329,19 @@ public class StreamConsumerService {
                 oi.setOrderId(order.getId());
                 oi.setProductId(pid);
                 oi.setName(p.getName());
-                // Snapshot the effective price actually paid for this item (flash-discounted when
-                // live, list price otherwise) — consistent with order.total_in_cents which carries
-                // the flash-discounted total. Fixes the Task 6 finding where the LIST price was
-                // snapshotted here, diverging from the discounted paid total for flash items.
-                oi.setPriceInCents(Money.flashPriceInCents(p));
+                // Snapshot the effective price actually paid: discounted only for live-flash
+                // items (those got the discount at checkout); non-flash + not-yet-open flash
+                // sell at list price. Matches order.total_in_cents (carries the same rule).
+                boolean liveFlash = liveFlashIds.contains(pid);
+                oi.setPriceInCents(Money.priceInCentsFor(p, liveFlash));
                 oi.setQuantity(qty);
                 orderItemMapper.insert(oi);
-                redis.opsForValue().set(RedisKeys.seckill(pid, userId), "1",
-                        3600, TimeUnit.SECONDS);
+                // One-per-user seckill key applies ONLY to live-flash items (the restricted
+                // seckill items); non-flash items are freely re-purchasable.
+                if (liveFlash) {
+                    redis.opsForValue().set(RedisKeys.seckill(pid, userId), "1",
+                            3600, TimeUnit.SECONDS);
+                }
             }
             // The per-item decrementStock loop above mutated product.stock in the DB; clear the
             // list cache so the list path serves fresh stock (the cache would otherwise be stale ≤30s).

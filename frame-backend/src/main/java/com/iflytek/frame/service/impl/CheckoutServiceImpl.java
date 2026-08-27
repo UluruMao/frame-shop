@@ -122,39 +122,62 @@ public class CheckoutServiceImpl implements CheckoutService {
             validatedCoinAmount = requested;
         }
 
-        // 2b. One-per-user check (spec §6 step 3): reject users who already purchased.
+        // 2b/3. Flash sale is a DISCOUNT, not a purchase gate. Partition the cart into:
+        //   - liveFlash: product.isFlashSale AND stock:{id} key exists in Redis (sale open).
+        //     These go through the Redis Lua gate (burst-shield) + one-per-user seckill key,
+        //     and get the discounted flash price.
+        //   - dbOnly: everything else (non-flash, or flash-not-yet-open). No Redis gate — the
+        //     consumer's DB-backstop decrementStock (WHERE stock >= qty) is the oversell
+        //     authority. Sold at list price (no discount).
+        // This lets shoppers always buy (non-flash + not-yet-open flash) without the gate
+        // blocking them with "stock not initialized."
+        Map<Long, Product> byId = products.stream().collect(Collectors.toMap(Product::getId, p -> p));
+        List<Long> liveFlashIds = new ArrayList<>();
+        List<Integer> liveFlashQtys = new ArrayList<>();
         for (Long pid : qtyByProduct.keySet()) {
+            Product p = byId.get(pid);
+            boolean saleLive = p != null && p.isFlashSale()
+                    && Boolean.TRUE.equals(redis.hasKey(RedisKeys.stock(pid)));
+            if (saleLive) {
+                liveFlashIds.add(pid);
+                liveFlashQtys.add(qtyByProduct.get(pid));
+            }
+        }
+
+        // One-per-user seckill restriction applies ONLY to live flash items.
+        for (Long pid : liveFlashIds) {
             if (Boolean.TRUE.equals(redis.hasKey(RedisKeys.seckill(pid, userId)))) {
                 throw new BusinessException(ResultCode.CONFLICT, "您已购买过此商品");
             }
         }
 
-        // 3. Redis Lua gate (atomic, all-or-nothing — no partial decrements on FAIL).
-        //    Gap 3: catch Redis outage → 503 (fail-closed, never bypass the gate).
-        //    Gap 3b: the Lua script returns a tri-state String — "OK" proceed, "FAIL"
-        //    sold-out 409, "NOT_INITIALIZED" stock-not-loaded 503 (distinct from sold out).
-        List<Long> ids = new ArrayList<>(qtyByProduct.keySet());
-        List<Integer> qtys = ids.stream().map(qtyByProduct::get).collect(Collectors.toList());
-        String claimResult;
-        try {
-            claimResult = stockGateService.tryClaimStock(ids, qtys);
-        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
-            throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE, "库存系统暂时不可用，请稍后再试");
-        }
-        switch (claimResult) {
-            case "OK" -> { /* proceed — stock atomically decremented in Redis */ }
-            case "NOT_INITIALIZED" -> throw new BusinessException(
-                    ResultCode.SERVICE_UNAVAILABLE, "秒杀尚未开始，请稍后再试");
-            default -> throw new BusinessException(ResultCode.CONFLICT, "商品已售罄");
+        // Redis Lua gate — only for live flash items (atomic all-or-nothing decrement).
+        // Gap 3: catch Redis outage → 503 (fail-closed, never bypass the gate).
+        if (!liveFlashIds.isEmpty()) {
+            String claimResult;
+            try {
+                claimResult = stockGateService.tryClaimStock(liveFlashIds, liveFlashQtys);
+            } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
+                throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE, "库存系统暂时不可用，请稍后再试");
+            }
+            switch (claimResult) {
+                case "OK" -> { /* proceed — flash stock atomically decremented in Redis */ }
+                case "NOT_INITIALIZED" -> throw new BusinessException(
+                        ResultCode.SERVICE_UNAVAILABLE, "秒杀尚未开始，请稍后再试");
+                default -> throw new BusinessException(ResultCode.CONFLICT, "商品已售罄");
+            }
         }
 
-        // 4. Compute total from DB prices (flash items use the discounted flash price).
-        Map<Long, Product> byId = products.stream().collect(Collectors.toMap(Product::getId, p -> p));
-        int totalInCents = Money.subtotalCentsFlash(byId, qtyByProduct);
+        // 4. Compute total. Flash discount applies ONLY to live-flash items (saleLive);
+        // non-flash + not-yet-open flash sell at list price. Money.subtotalCentsFlashLive
+        // takes the set of live-flash ids so it discounts exactly those.
+        int totalInCents = Money.subtotalCentsFlashLive(byId, qtyByProduct,
+                new HashSet<>(liveFlashIds));
 
         // 5. LPUSH to orders:pending + set order_status = queued, return 202.
         Long orderId = ORDER_SEQ.incrementAndGet();
-        String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct, useCoins, validatedCoinAmount);
+        String payload = jsonPayload(orderId, userId, request, totalInCents, qtyByProduct,
+                useCoins, validatedCoinAmount, new HashSet<>(liveFlashIds));
         redis.opsForList().leftPush(RedisKeys.ordersPending(), payload);
         redis.opsForValue().set(RedisKeys.orderStatus(orderId), "queued");
         return new CheckoutResponse(orderId, "queued");
@@ -164,9 +187,12 @@ public class CheckoutServiceImpl implements CheckoutService {
      * Serialize the durable-write context as JSON for the consumer.
      * Carries everything the consumer needs to insert the Order + OrderItems
      * without re-fetching from the DB (except for the DB-backstop stock decrement).
+     * {@code liveFlashIds} tells the consumer which items get the flash-discount snapshot
+     * price (matching what the customer paid).
      */
     private String jsonPayload(Long orderId, Long userId, CheckoutRequest req,
-                                int total, Map<Long, Integer> items, boolean useCoins, int coinAmount) {
+                                int total, Map<Long, Integer> items, boolean useCoins, int coinAmount,
+                                Set<Long> liveFlashIds) {
         try {
             var node = objectMapper.createObjectNode();
             node.put("orderId", orderId);
@@ -180,6 +206,8 @@ public class CheckoutServiceImpl implements CheckoutService {
             node.put("idempotencyKey", req.getIdempotencyKey());
             node.put("useCoins", useCoins);
             node.put("coinAmount", coinAmount);
+            var liveFlashNode = node.putArray("liveFlashIds");
+            liveFlashIds.forEach(liveFlashNode::add);
             var itemsNode = node.putArray("items");
             items.forEach((pid, qty) -> {
                 var i = itemsNode.addObject();

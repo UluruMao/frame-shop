@@ -2,6 +2,7 @@ package com.iflytek.frame.common;
 
 import com.iflytek.frame.entity.Product;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Money / coin math. The single source of the cents↔coins↔yuan relationship:
@@ -41,6 +42,29 @@ public final class Money {
             if (p != null) total += flashPriceInCents(p) * e.getValue();
         }
         return total;
+    }
+
+    /**
+     * Subtotal discounting ONLY the items whose id is in {@code liveFlashIds} (sale is live).
+     * Non-flash items and flash items whose sale isn't open sell at list price — flash is a
+     * discount that applies only while the sale is live, not a purchase gate. Matches the
+     * checkout's partition: only live-flash items went through the Redis gate + get the discount.
+     */
+    public static int subtotalCentsFlashLive(Map<Long, Product> byId, Map<Long, Integer> qty,
+                                              Set<Long> liveFlashIds) {
+        int total = 0;
+        for (Map.Entry<Long, Integer> e : qty.entrySet()) {
+            Product p = byId.get(e.getKey());
+            if (p == null) continue;
+            int unit = liveFlashIds.contains(e.getKey()) ? flashPriceInCents(p) : p.getPriceInCents();
+            total += unit * e.getValue();
+        }
+        return total;
+    }
+
+    /** Per-item effective price: discounted only if the item is in the live-flash set. */
+    public static int priceInCentsFor(Product p, boolean liveFlash) {
+        return liveFlash ? flashPriceInCents(p) : p.getPriceInCents();
     }
 
     /** coins → cents (1:1). Named for symmetry, reads better than a bare cast. */

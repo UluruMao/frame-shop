@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -59,12 +60,36 @@ class CheckoutServiceImplTest {
     }
 
     @Test
+    void checkout_nonFlashProduct_skipsRedisGate_succeedsViaDbBackstop() {
+        // Flash is only a DISCOUNT, not a purchase gate. A non-flash product must be
+        // buyable without the Redis Lua gate — the consumer's DB-backstop decrementStock
+        // (WHERE stock >= qty) is the oversell authority. So tryClaimStock is NOT called.
+        Product p = new Product();
+        p.setId(1L);
+        p.setPriceInCents(1999);
+        p.setStock(5);
+        p.setFlashSale(false);
+        when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
+        when(redis.opsForList()).thenReturn(listOps);
+        when(redis.opsForValue()).thenReturn(valueOps);
+
+        CheckoutResponse resp = checkoutService.checkout(req("key-noflash"), 7L);
+
+        assertThat(resp.getStatus()).isEqualTo("queued");
+        verify(stockGateService, never()).tryClaimStock(anyList(), anyList());
+        verify(listOps).leftPush(eq("orders:pending"), any());
+    }
+
+    @Test
     void checkout_stockClaimed_lpushAndReturnsQueued() {
         Product p = new Product();
         p.setId(1L);
         p.setPriceInCents(1999);
         p.setStock(5);
+        p.setFlashSale(true); // flash-live: Redis gate applies
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
+        // stock:{id} exists (sale live) but seckill:{id}:{user} does NOT (not yet purchased).
+        when(redis.hasKey("stock:1")).thenReturn(true);
         when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("OK");
         when(redis.opsForList()).thenReturn(listOps);
         when(redis.opsForValue()).thenReturn(valueOps);
@@ -84,7 +109,9 @@ class CheckoutServiceImplTest {
         p.setId(1L);
         p.setPriceInCents(1999);
         p.setStock(1);
+        p.setFlashSale(true); // flash-live: Redis gate applies
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
+        when(redis.hasKey("stock:1")).thenReturn(true);
         when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("FAIL");
 
         assertThatThrownBy(() -> checkoutService.checkout(req("key-2"), 7L))
@@ -94,19 +121,23 @@ class CheckoutServiceImplTest {
     }
 
     @Test
-    void checkout_stockNotInitialized_throwsServiceUnavailable() {
-        // Gap 3b: missing stock:{pid} key → "NOT_INITIALIZED" → 503, distinct from 409 sold out.
+    void checkout_flashNotOpen_skipsGate_succeedsAtListPrice() {
+        // Flash product whose sale isn't live (stock:{id} key missing) → NOT 503; bought
+        // at list price via DB-backstop (flash is only a discount, not a gate).
         Product p = new Product();
         p.setId(1L);
         p.setPriceInCents(1999);
         p.setStock(5);
+        p.setFlashSale(true);
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
-        when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("NOT_INITIALIZED");
+        when(redis.hasKey("stock:1")).thenReturn(false); // sale not open → dbOnly, no gate
+        when(redis.opsForList()).thenReturn(listOps);
+        when(redis.opsForValue()).thenReturn(valueOps);
 
-        assertThatThrownBy(() -> checkoutService.checkout(req("key-2b"), 7L))
-                .isInstanceOf(BusinessException.class)
-                .extracting("code").isEqualTo(503);
-        verify(redis, never()).opsForList();
+        CheckoutResponse resp = checkoutService.checkout(req("key-2b"), 7L);
+
+        assertThat(resp.getStatus()).isEqualTo("queued");
+        verify(stockGateService, never()).tryClaimStock(anyList(), anyList());
     }
 
     @Test
@@ -160,7 +191,9 @@ class CheckoutServiceImplTest {
         p.setId(1L);
         p.setPriceInCents(1000);
         p.setStock(10);
+        p.setFlashSale(true); // flash-live: Redis gate applies
         when(productMapper.selectBatchIds(anyCollection())).thenReturn(List.of(p));
+        when(redis.hasKey("stock:1")).thenReturn(true);
         when(stockGateService.tryClaimStock(anyList(), anyList())).thenReturn("OK");
         when(redis.opsForList()).thenReturn(listOps);
         when(redis.opsForValue()).thenReturn(valueOps);
