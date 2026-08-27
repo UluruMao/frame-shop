@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 // Mock at the @/api/chat + @/hooks/useChat boundaries (Phase B final-review
 // smell): the page's wiring (openSession on mount, fetchHistory on session,
@@ -7,12 +7,15 @@ import { render, screen, fireEvent } from '@testing-library/react'
 vi.mock('@/api/chat', () => ({
   openSession: vi.fn().mockResolvedValue({ id: 7, userId: 1, adminId: null, status: 'OPEN', createTime: '', updateTime: '' }),
   fetchHistory: vi.fn().mockResolvedValue({ records: [], total: 0 }),
+  deleteSession: vi.fn().mockResolvedValue(undefined),
 }))
 const mockSend = vi.fn()
+const mockSetMessages = vi.fn()
 vi.mock('@/hooks/useChat', () => ({
-  useChat: () => ({ messages: [], send: mockSend, connected: true, setMessages: vi.fn() }),
+  useChat: () => ({ messages: [], send: mockSend, connected: true, setMessages: mockSetMessages }),
 }))
 
+import { deleteSession } from '@/api/chat'
 import Chat from '@/pages/Chat'
 
 describe('Chat page', () => {
@@ -30,5 +33,17 @@ describe('Chat page', () => {
     expect(await screen.findByText('联系客服')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('输入消息…')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument()
+  })
+
+  it('deletes the chat session on click', async () => {
+    // jsdom's window.confirm returns false in this setup, which would abort
+    // handleDelete before deleteSession runs. Force-confirm per the brief.
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<Chat />)
+    await screen.findByText('联系客服')
+    fireEvent.click(screen.getByRole('button', { name: '删除聊天' }))
+    // confirm() is a window.confirm stub — jsdom returns true by default; if it
+    // returns false, mock vi.spyOn(window, 'confirm').mockReturnValue(true) first.
+    await waitFor(() => expect(deleteSession).toHaveBeenCalledWith(7))
   })
 })
