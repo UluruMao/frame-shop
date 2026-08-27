@@ -17,8 +17,12 @@ StandardError=journal
 # the placeholders. Create the `frame` system user + chown /opt/frame to it BEFORE start
 # (see COMPLETE-DEPLOYMENT-GUIDE.md Part 4.2).
 Environment=FRAME_DB_PASSWORD=change_me_in_prod
+Environment=FRAME_DB_HOST=127.0.0.1
+Environment=FRAME_DB_PORT=13306
 Environment=FRAME_JWT_SECRET=change_me_to_a_long_random_base64_secret_at_least_256_bits
 Environment=FRAME_REDIS_PASSWORD=
+Environment=FRAME_REDIS_HOST=127.0.0.1
+Environment=FRAME_REDIS_PORT=16379
 Environment=FRAME_CORS_ORIGINS=http://192.168.1.105
 # Aliyun 短信认证服务 (dypnsapi) — 填真实值后重启 frame-backend。
 # provider=aliyun 启用真实短信；不填则用 logging stub（不真发短信）。
