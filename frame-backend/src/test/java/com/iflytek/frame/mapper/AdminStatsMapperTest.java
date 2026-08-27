@@ -6,14 +6,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Aggregate-query tests for {@link AdminStatsMapper} (the 5 dashboard tiles + last-6-months
- * revenue). Follows the repo's established integration-test pattern: {@code @SpringBootTest} +
- * {@code @TestPropertySource} for JWT config (no test profile exists). The DB may be empty or
+ * Aggregate-query tests for {@link AdminStatsMapper} (the 5 dashboard tiles + 3 chart datasets,
+ * time-windowed). Follows the repo's established integration-test pattern: {@code @SpringBootTest}
+ * + {@code @TestPropertySource} for JWT config (no test profile exists). The DB may be empty or
  * shared with other tests, so assertions are non-negativity + ≤6 months (Task 13 seed data
  * will make these realistic).
  */
@@ -27,9 +29,14 @@ class AdminStatsMapperTest {
     @Autowired
     private AdminStatsMapper adminStatsMapper;
 
+    /** A wide window covering all seeded data (3 years back from today). */
+    private static final LocalDateTime FROM = LocalDate.now().minusDays(1095).atStartOfDay();
+    private static final LocalDateTime TO = LocalDate.now().plusDays(1).atStartOfDay();
+    private static final String BUCKET_MONTH = "DATE_FORMAT(paid_at, '%Y-%m')";
+
     @Test
     void dashboardStatsReturnsZeroOnEmptyDb() {
-        DashboardStatsVO stats = adminStatsMapper.dashboardStats();
+        DashboardStatsVO stats = adminStatsMapper.dashboardStats(FROM, TO, BUCKET_MONTH);
         assertThat(stats).isNotNull();
         assertThat(stats.totalOrders()).isGreaterThanOrEqualTo(0);
         assertThat(stats.totalProducts()).isGreaterThanOrEqualTo(0);
@@ -39,9 +46,26 @@ class AdminStatsMapperTest {
     }
 
     @Test
-    void monthlyRevenueReturnsLastSixMonths() {
-        List<DashboardStatsVO.MonthRevenue> months = adminStatsMapper.monthlyRevenue();
-        assertThat(months).hasSizeLessThanOrEqualTo(6);
+    void revenueTrendReturnsBucketsInWindow() {
+        List<DashboardStatsVO.TrendPoint> trend = adminStatsMapper.revenueTrend(FROM, TO, BUCKET_MONTH);
+        assertThat(trend).isNotNull();
+        // Buckets are YYYY-MM strings; each non-empty bucket must have non-negative cents.
+        for (DashboardStatsVO.TrendPoint p : trend) {
+            assertThat(p.cents()).isGreaterThanOrEqualTo(0);
+        }
+    }
+
+    @Test
+    void unitsByProductAndSalesShareAreConsistent() {
+        List<DashboardStatsVO.ProductUnits> units = adminStatsMapper.unitsByProduct(FROM, TO);
+        List<DashboardStatsVO.ProductShare> share = adminStatsMapper.salesShareByProduct(FROM, TO);
+        // Both queries use SUM(oi.quantity) over the same window — same measure, so their
+        // total units must match.
+        assertThat(units).isNotNull();
+        assertThat(share).isNotNull();
+        long unitsTotal = units.stream().mapToLong(DashboardStatsVO.ProductUnits::units).sum();
+        long shareTotal = share.stream().mapToLong(DashboardStatsVO.ProductShare::units).sum();
+        assertThat(unitsTotal).isEqualTo(shareTotal);
     }
 
     /**
@@ -53,7 +77,7 @@ class AdminStatsMapperTest {
      */
     @Test
     void seededDataProducesRealisticDashboard() {
-        DashboardStatsVO stats = adminStatsMapper.dashboardStats();
+        DashboardStatsVO stats = adminStatsMapper.dashboardStats(FROM, TO, BUCKET_MONTH);
         // After the seed: >0 revenue, >0 orders, >0 products, avg rating between 3 and 5.
         assertThat(stats.totalProducts()).isGreaterThan(2);
         assertThat(stats.totalOrders()).isGreaterThan(50);

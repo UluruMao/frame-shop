@@ -2,7 +2,9 @@ package com.iflytek.frame.service;
 
 import com.iflytek.frame.dto.DashboardStatsVO;
 
-/** Aggregate dashboard metrics for the admin console. */
+import java.time.LocalDate;
+
+/** Aggregate dashboard metrics for the admin console (time-windowed). */
 public interface AdminStatsService {
-    DashboardStatsVO getDashboardStats();
+    DashboardStatsVO getDashboardStats(String range, LocalDate from, LocalDate to);
 }

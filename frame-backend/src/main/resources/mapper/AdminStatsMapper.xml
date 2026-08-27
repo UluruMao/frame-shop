@@ -7,33 +7,53 @@
       constructor auto-mapping: with resultType (NOT a resultMap), it maps columns to the
       canonical constructor's params by name and unboxes primitives. So the SELECT aliases
       match the record component names exactly (totalRevenueCents, totalOrders, ...). The
-      dashboardStats() query returns the 5 tile metrics plus a NULL placeholder for
-      monthlyRevenue, which is loaded separately by monthlyRevenue() and merged by the service
-      layer (Task 10). Using a <resultMap> with <result property> would fail (records have no
-      setters), and a <constructor> block would disable native record auto-support and force
-      boxed Long/Double (no matching primitive constructor).
+      dashboardStats() query returns the 5 tile metrics plus NULL placeholders for the four
+      list components (monthlyRevenue, unitsByProduct, revenueTrend, salesShareByProduct),
+      which are loaded separately and merged by the service layer. Using a <resultMap> with
+      <result property> would fail (records have no setters), and a <constructor> block would
+      disable native record auto-support and force boxed Long/Double (no matching primitive
+      constructor).
+
+      The #{from}/#{to} bind the time window (LocalDateTime). ${bucketExpr} is RAW string
+      substitution — it is SAFE because the service passes a fixed server-whitelisted constant
+      (BUCKET_DAY / BUCKET_MONTH) selected by the range, NEVER the client request string.
     -->
     <select id="dashboardStats" resultType="com.iflytek.frame.dto.DashboardStatsVO">
         SELECT
-            (SELECT COALESCE(SUM(paid_in_cents), 0)
-               FROM orders
-              WHERE status IN ('PAID','SHIPPED','DELIVERED','COMPLETED')) AS totalRevenueCents,
-            (SELECT COUNT(*) FROM orders) AS totalOrders,
+            (SELECT COALESCE(SUM(paid_in_cents), 0) FROM orders
+              WHERE paid_at &gt;= #{from} AND paid_at &lt; #{to}
+                AND status IN ('PAID','SHIPPED','DELIVERED','COMPLETED')) AS totalRevenueCents,
+            (SELECT COUNT(*) FROM orders WHERE create_time &gt;= #{from} AND create_time &lt; #{to}) AS totalOrders,
             (SELECT COUNT(*) FROM product) AS totalProducts,
-            (SELECT COUNT(*) FROM orders WHERE refund_status = 'APPROVED') AS refundCount,
+            (SELECT COUNT(*) FROM orders WHERE refund_status = 'APPROVED'
+                AND paid_at &gt;= #{from} AND paid_at &lt; #{to}) AS refundCount,
             (SELECT COALESCE(AVG((quality_stars + logistics_stars + service_stars) / 3.0), 0)
-               FROM review) AS avgRating,
-            NULL AS monthlyRevenue
+               FROM review WHERE create_time &gt;= #{from} AND create_time &lt; #{to}) AS avgRating,
+            NULL AS monthlyRevenue, NULL AS unitsByProduct, NULL AS revenueTrend, NULL AS salesShareByProduct
     </select>
 
-    <select id="monthlyRevenue" resultType="com.iflytek.frame.dto.DashboardStatsVO$MonthRevenue">
-        SELECT DATE_FORMAT(paid_at, '%Y-%m') AS month,
-               COALESCE(SUM(paid_in_cents), 0) AS revenueCents
+    <select id="unitsByProduct" resultType="com.iflytek.frame.dto.DashboardStatsVO$ProductUnits">
+        SELECT oi.product_id AS productId, oi.name AS name, SUM(oi.quantity) AS units
+          FROM order_item oi JOIN orders o ON oi.order_id = o.id
+         WHERE o.paid_at &gt;= #{from} AND o.paid_at &lt; #{to}
+           AND o.status IN ('PAID','SHIPPED','DELIVERED','COMPLETED')
+         GROUP BY oi.product_id, oi.name ORDER BY units DESC
+    </select>
+
+    <!-- ${bucketExpr} is a server-whitelisted DATE_FORMAT constant (never client input) — see mapper/service. -->
+    <select id="revenueTrend" resultType="com.iflytek.frame.dto.DashboardStatsVO$TrendPoint">
+        SELECT ${bucketExpr} AS bucket, COALESCE(SUM(paid_in_cents), 0) AS cents
           FROM orders
-         WHERE paid_at IS NOT NULL
+         WHERE paid_at &gt;= #{from} AND paid_at &lt; #{to}
            AND status IN ('PAID','SHIPPED','DELIVERED','COMPLETED')
-           AND paid_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-         GROUP BY DATE_FORMAT(paid_at, '%Y-%m')
-         ORDER BY month ASC
+         GROUP BY ${bucketExpr} ORDER BY bucket ASC
+    </select>
+
+    <select id="salesShareByProduct" resultType="com.iflytek.frame.dto.DashboardStatsVO$ProductShare">
+        SELECT oi.product_id AS productId, oi.name AS name, SUM(oi.quantity) AS units
+          FROM order_item oi JOIN orders o ON oi.order_id = o.id
+         WHERE o.paid_at &gt;= #{from} AND o.paid_at &lt; #{to}
+           AND o.status IN ('PAID','SHIPPED','DELIVERED','COMPLETED')
+         GROUP BY oi.product_id, oi.name ORDER BY units DESC
     </select>
 </mapper>
