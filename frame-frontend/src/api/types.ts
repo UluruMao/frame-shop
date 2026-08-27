@@ -66,6 +66,8 @@ export interface Product {
   category?: string
   isFlashSale?: boolean
   flashSaleAt?: string
+  /** Flash-sale discount percentage (1-99). Backend derives flashPriceInCents = priceInCents * (100 - discountPercent) / 100. */
+  discountPercent?: number
   description?: string
   createTime?: string
   updateTime?: string

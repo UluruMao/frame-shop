@@ -27,6 +27,7 @@ import StatusBadge from '@/components/ui/StatusBadge'
 import Badge from '@/components/ui/Badge'
 import Tabs from '@/components/ui/Tabs'
 import Table from '@/components/ui/Table'
+import Modal from '@/components/ui/Modal'
 
 /** Top-level Admin tabs: Products (CRUD), Orders (shipping/refund), and Chat (inbox). */
 type AdminTab = 'products' | 'orders' | 'chat'
@@ -67,6 +68,7 @@ interface FormState {
   description: string
   isFlashSale: boolean
   flashSaleAt: string
+  discountPercent: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -78,6 +80,7 @@ const EMPTY_FORM: FormState = {
   description: '',
   isFlashSale: false,
   flashSaleAt: '',
+  discountPercent: '',
 }
 
 /**
@@ -98,6 +101,8 @@ export default function Admin() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [saleId, setSaleId] = useState<number | null>(null)
+  /** Two-step flash-confirm Modal: "创建"/"更新" opens this; "确认" runs doSave. */
+  const [confirmFlash, setConfirmFlash] = useState(false)
 
   // --- Orders tab state ---
   const [orders, setOrders] = useState<Order[]>([])
@@ -168,11 +173,11 @@ export default function Admin() {
       description: p.description ?? '',
       isFlashSale: !!p.isFlashSale,
       flashSaleAt: toDatetimeLocal(p.flashSaleAt),
+      discountPercent: p.discountPercent != null ? String(p.discountPercent) : '',
     })
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
+  async function doSave() {
     setSaving(true)
     setError(null)
     const payload = {
@@ -184,6 +189,7 @@ export default function Admin() {
       description: form.description || undefined,
       isFlashSale: form.isFlashSale,
       flashSaleAt: form.isFlashSale && form.flashSaleAt ? form.flashSaleAt : undefined,
+      discountPercent: form.isFlashSale && form.discountPercent ? Number(form.discountPercent) : undefined,
     }
     try {
       if (editingId !== null) {
@@ -198,6 +204,12 @@ export default function Admin() {
     } finally {
       setSaving(false)
     }
+  }
+
+  /** Opens the two-step confirm Modal; the actual save runs in `doSave` on confirm. */
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setConfirmFlash(true)
   }
 
   async function handleDelete(id: number) {
@@ -453,6 +465,23 @@ export default function Admin() {
             />
           </label>
         )}
+        {form.isFlashSale && (
+          <label className="flex flex-col gap-1 text-sm text-slate-600">
+            <span className="text-xs text-slate-500">秒杀折扣 (%)</span>
+            <Input
+              type="number"
+              min={1} max={99}
+              placeholder="秒杀折扣 (%)"
+              value={form.discountPercent}
+              onChange={(e) => setForm({ ...form, discountPercent: e.target.value })}
+            />
+            {form.discountPercent && Number(form.discountPercent) > 0 && Number(form.priceInCents) > 0 && (
+              <span className="text-xs text-brand-600">
+                秒杀价 ¥{((Number(form.priceInCents) * (100 - Number(form.discountPercent)) / 100) / 100).toFixed(2)}
+              </span>
+            )}
+          </label>
+        )}
         <div className="flex gap-2">
           <Button
             type="submit"
@@ -472,6 +501,18 @@ export default function Admin() {
           )}
         </div>
       </form>
+
+      {/* Two-step flash-confirm: submit opens this Modal; "确认" runs the save. */}
+      <Modal open={confirmFlash} onClose={() => setConfirmFlash(false)} title="确认秒杀折扣">
+        <p className="text-sm text-slate-600">
+          确认秒杀折扣为 {form.discountPercent}%？
+          {form.priceInCents && ` 秒杀价 ¥${((Number(form.priceInCents) * (100 - Number(form.discountPercent)) / 100) / 100).toFixed(2)}。`}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirmFlash(false)}>取消</Button>
+          <Button variant="primary" onClick={() => { void doSave(); setConfirmFlash(false) }}>确认</Button>
+        </div>
+      </Modal>
 
       {/* Product table */}
       {loading && <p className="text-sm text-slate-500">加载中…</p>}
