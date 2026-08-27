@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -23,6 +24,7 @@ public class ProductDTO {
     @NotNull(message = "stock must not be null")
     @Min(value = 0, message = "stock must be >= 0")
     private Integer stock;
+    @Size(max = 2048, message = "imageUrl must be at most 2048 chars")
     private String imageUrl;
     private String category;
     /**

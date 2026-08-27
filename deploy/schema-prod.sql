@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS `product` (
     `name`          VARCHAR(128) NOT NULL,
     `price_in_cents` INT          NOT NULL,
     `stock`         INT           NOT NULL DEFAULT 0,
-    `image_url`     VARCHAR(512)  DEFAULT NULL,
+    `image_url`     VARCHAR(2048)  DEFAULT NULL,
     `category`      VARCHAR(64)   DEFAULT NULL,
     `is_flash_sale` TINYINT(1)    NOT NULL DEFAULT 0,
     `flash_sale_at` DATETIME      DEFAULT NULL,
@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS `chat_message` (
     `sender_type` VARCHAR(16)  NOT NULL,
     `sender_id`   BIGINT       NOT NULL,
     `content`     TEXT         NOT NULL,
-    `image_url`   VARCHAR(512),
+    `image_url`   VARCHAR(2048),
     `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
     `update_time` DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
@@ -214,6 +214,8 @@ ALTER TABLE `orders` ADD COLUMN IF NOT EXISTS `cancel_reason`   VARCHAR(256) DEF
 ALTER TABLE `product` ADD COLUMN IF NOT EXISTS `description` VARCHAR(512) DEFAULT NULL AFTER `flash_sale_at`;
 -- product: flash-sale discount percentage (1-99; null = no discount even if flash)
 ALTER TABLE `product` ADD COLUMN IF NOT EXISTS `discount_percent` INT DEFAULT NULL AFTER `flash_sale_at`;
+-- product: widen image_url from VARCHAR(512) → VARCHAR(2048) — real CDN/search URLs exceed 512.
+ALTER TABLE `product` MODIFY COLUMN `image_url` VARCHAR(2048) DEFAULT NULL;
 
 -- ============================================================================
 -- Dedicated app user (not root) for production
