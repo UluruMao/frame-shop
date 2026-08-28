@@ -84,7 +84,7 @@ export default function Products() {
           {items.map((p) => (
             <Link to={`/products/${p.id}`} key={p.id}>
               <Card className="p-3 transition-shadow hover:shadow">
-                {p.imageUrl && <img src={p.imageUrl} alt={p.name} loading="lazy" className="mb-2 h-32 w-full object-cover" />}
+                {p.imageUrl && <img src={p.imageUrl} alt={p.name} loading="lazy" className="mb-2 h-32 w-full rounded bg-slate-50 object-contain" />}
                 <div className="font-medium">{p.name}</div>
                 <div className="text-brand-600">{formatPrice(p.priceInCents)}</div>
                 <div className="text-sm text-slate-500">已售 {p.sold} · 评分 {p.avgRating.toFixed(1)}</div>

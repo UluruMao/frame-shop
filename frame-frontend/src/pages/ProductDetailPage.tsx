@@ -101,7 +101,7 @@ export default function ProductDetailPage() {
   return (
     <div className="mx-auto max-w-4xl p-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        {detail.imageUrl && <img src={detail.imageUrl} alt={detail.name} loading="lazy" className="h-64 w-full rounded object-cover" />}
+        {detail.imageUrl && <img src={detail.imageUrl} alt={detail.name} loading="lazy" className="h-64 w-full rounded bg-slate-50 object-contain" />}
         <div>
           <h1 className="text-2xl font-bold">{detail.name}</h1>
           <div className="my-2 text-xl text-brand-600">{formatPrice(detail.priceInCents)}</div>
