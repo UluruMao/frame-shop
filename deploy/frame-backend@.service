@@ -1,0 +1,29 @@
+[Unit]
+Description=Frame Shop Backend instance %i
+After=network.target mariadb.service redis.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/frame
+ExecStart=/iflytek/software/amazon-corretto-21.0.12.9.1-linux-aarch64/bin/java -jar /opt/frame/frame-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod --server.port=%i --server.address=127.0.0.1
+Restart=on-failure
+RestartSec=5
+Environment=FRAME_DB_HOST=127.0.0.1
+Environment=FRAME_DB_PORT=13306
+Environment=FRAME_DB_NAME=frame_db
+Environment=FRAME_DB_PASSWORD=<set-at-deploy-time>
+Environment=FRAME_REDIS_HOST=127.0.0.1
+Environment=FRAME_REDIS_PORT=16379
+Environment=FRAME_REDIS_PASSWORD=
+Environment=FRAME_JWT_SECRET=<generate-long-random-string>
+Environment=FRAME_CORS_ORIGINS=http://172.29.231.145
+Environment=FRAME_SMS_PROVIDER=aliyun
+Environment=FRAME_SMS_AK_ID=<your-aliyun-accesskey-id>
+Environment=FRAME_SMS_AK_SECRET=<your-aliyun-accesskey-secret>
+Environment=FRAME_SMS_SIGN_NAME=恒创联众
+Environment=FRAME_SMS_TEMPLATE_CODE=100001
+Environment=FRAME_SMS_REGION=cn-hangzhou
+
+[Install]
+WantedBy=multi-user.target
