@@ -2,7 +2,7 @@
 
 A ready-to-develop full-stack template: a Spring Boot backend (`frame-backend`) and a
 React + Vite frontend (`frame-frontend`), cleanly separated. The frontend talks to the
-backend purely over HTTP/JSON — it never touches the database (前后端分离). Auth is
+backend purely over HTTP/JSON — it never touches the database. Auth is
 stateless JWT, so either side can be scaled/redeployed independently.
 
 This scaffold is the foundation for business-feature development: learn the stack, then
