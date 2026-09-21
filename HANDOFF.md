@@ -7,7 +7,7 @@
 
 ## 1. What this project is
 
-A **full-stack template/scaffold project** for an internship at Iflytek. The mentor's new assignment (pivoting from the previous Node/TypeScript e-commerce demo to the real production stack used at the company): learn Java, Spring Boot, Maven, MySQL/MariaDB, Redis, and Linux deployment. His instruction: "搭个模板项目，在这个上面进行开发" — scaffold a template first, then develop business features on top of it.
+A **full-stack template/scaffold project** for an internship at Iflytek. The mentor's new assignment (pivoting from the previous Node/TypeScript e-commerce demo to the real production stack used at the company): learn Java, Spring Boot, Maven, MySQL/MariaDB, Redis, and Linux deployment. His instruction: "scaffold a template first, then develop business features on top of it."
 
 The full spec is in **`prompt.txt`** (same folder). Read it — it's the source of truth. Summary below.
 
