@@ -55,3 +55,13 @@ mvnw.cmd
 # ===== Top-level =====
 *.png
 .superpowers/
+
+# ===== Local secrets / scratch files (NEVER commit) =====
+# key.txt, *.secrets.txt, and the local .env hold real DB/JWT/Aliyun-SMS
+# credentials. .env is already covered above; these catch local scratch files.
+key.txt
+*.secrets.txt
+*.secrets
+*_portfolio.txt
+# Local-only DB seeding / ad-hoc SQL scratch files
+seed-*.sql
