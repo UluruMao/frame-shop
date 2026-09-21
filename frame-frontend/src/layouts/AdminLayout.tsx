@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
 import { LayoutDashboard, Package, ClipboardList, MessageCircle, LogOut, Boxes } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 
@@ -18,9 +18,9 @@ export default function AdminLayout() {
     <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold text-slate-800">
+          <Link to="/admin/dashboard" className="flex items-center gap-2 font-semibold text-slate-800 hover:text-brand-600 transition-colors">
             <Boxes className="w-5 h-5 text-brand-600" /><span>秒杀商城 · 管理后台</span>
-          </div>
+          </Link>
           <nav className="flex items-center gap-1">
             {NAV.map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to} className={({ isActive }) => [

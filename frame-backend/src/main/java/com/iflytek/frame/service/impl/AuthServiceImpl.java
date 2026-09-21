@@ -31,14 +31,14 @@ public class AuthServiceImpl implements AuthService {
         String id = request.getUsername();
         User user = id.matches("\\d{11}") ? userService.findByPhone(id) : userService.findByUsername(id);
         if (user == null) {
-            throw new BusinessException(ResultCode.USER_NOT_FOUND, "user not found");
+            throw new BusinessException(ResultCode.USER_NOT_FOUND, "账号或密码错误");
         }
         if ("LOCKED".equals(user.getStatus())) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "account locked; use forgot password");
+            throw new BusinessException(ResultCode.FORBIDDEN, "账号已锁定，请使用找回密码功能");
         }
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             if (user.getId() != null) loginAttemptService.recordFailure(user.getId());
-            throw new BusinessException(ResultCode.BAD_CREDENTIALS, "bad credentials");
+            throw new BusinessException(ResultCode.BAD_CREDENTIALS, "账号或密码错误");
         }
         loginAttemptService.recordSuccess(user.getId());
         try {

@@ -7,7 +7,12 @@ export function updateProfile(nickname: string, signature: string): Promise<void
 export function uploadAvatar(file: File): Promise<string> {
   const form = new FormData()
   form.append('file', file)
-  return request.post<string>('/auth/avatar', form)
+  // Let axios/browser set multipart/form-data with a boundary. The shared
+  // request instance defaults Content-Type to application/json, which makes
+  // axios stringify FormData to JSON and triggers a backend MultipartException (500).
+  return request.post<string>('/auth/avatar', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
 }
 
 export function rebindInit(oldPhoneUsable: boolean): Promise<void> {

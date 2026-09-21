@@ -25,5 +25,8 @@ export function listUnreviewedOrders(): Promise<Order[]> {
 export function uploadReviewImage(file: File): Promise<string> {
   const form = new FormData()
   form.append('file', file)
-  return request.post<string>('/reviews/images', form)
+  // Let axios/browser set multipart/form-data with a boundary (see uploadAvatar).
+  return request.post<string>('/reviews/images', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
 }

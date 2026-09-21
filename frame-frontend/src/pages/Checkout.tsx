@@ -12,7 +12,7 @@ import Card from '@/components/ui/Card'
 import StatusBadge from '@/components/ui/StatusBadge'
 import PageHeader from '@/components/ui/PageHeader'
 import Spinner from '@/components/ui/Spinner'
-import { formatPrice } from '@/lib/format'
+import { formatPrice, uuid } from '@/lib/format'
 
 /** Payment-method radio options shown in the checkout form. */
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string }[] = [
@@ -31,7 +31,7 @@ const POLL_TIMEOUT_MS = 30_000
  * Three-stage flash-sale checkout.
  *
  * Stage 1 (form): collect name/email/address, POST /checkout with a
- * `crypto.randomUUID()` idempotencyKey → 202 {orderId, status:"queued"}.
+ * `uuid()` idempotencyKey (crypto.randomUUID with an HTTP-context fallback) → 202 {orderId, status:"queued"}.
  *
  * Stage 2 (queued): poll GET /orders/{orderId} every 1s. While the consumer
  * hasn't persisted, the backend returns a synthetic placeholder Order with
@@ -157,7 +157,7 @@ export default function Checkout() {
         shippingAddress,
         customerPhone,
         paymentMethod,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: uuid(),
         useCoins: useCoins && coinAmount > 0,
         coinAmount: useCoins ? coinAmount : 0,
       })

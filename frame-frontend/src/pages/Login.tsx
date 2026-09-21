@@ -8,7 +8,7 @@ import Field from '@/components/ui/Field'
 import Input from '@/components/ui/Input'
 
 export default function Login() {
-  const [username, setUsername] = useState('admin')
+  const [username, setUsername] = useState('demo1')
   const [password, setPassword] = useState('admin123')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -86,7 +86,7 @@ export default function Login() {
         </Button>
 
         <p className="text-xs text-slate-400 text-center">
-          演示账号：admin / admin123
+          演示账号：demo1 / admin123
         </p>
         <p className="text-xs text-slate-500 text-center">
           <Link to="/forgot-password" className="text-brand-600 hover:underline">
@@ -96,6 +96,10 @@ export default function Login() {
           没有账号？{' '}
           <Link to="/register" className="text-brand-600 hover:underline">
             注册账号
+          </Link>
+          {' · '}
+          <Link to="/admin/login" className="text-brand-600 hover:underline">
+            管理员登入
           </Link>
         </p>
       </form>
