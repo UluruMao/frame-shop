@@ -1,4 +1,4 @@
-# Frame Shop · 秒杀商城 (Flash-Sale E-Commerce Platform)
+# Frame Shop · (Flash-Sale E-Commerce Platform)
 
 A full-stack, **Taobao-seckill-model** e-commerce platform — limited-quantity flash sales
 with many concurrent buyers, where **overselling is impossible by construction**. Built on a
@@ -219,4 +219,4 @@ cd e2e && node run-tests.mjs
 
 ## 📜 License
 
-Internship project. All rights reserved to the author.
+Internship project permitted by mentor. All rights reserved to the author.
