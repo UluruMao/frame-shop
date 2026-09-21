@@ -113,9 +113,9 @@ curl -X POST http://localhost/api/checkout \
   -d '{"items":[{"productId":1,"quantity":1}],"customerName":"x","customerEmail":"x@x","shippingAddress":"y","idempotencyKey":"k1"}'
 ```
 
-## Step 8 (optional): Distributed variant
+## Step 8 : Distributed variant
 
-To demonstrate 分布式 (FE/BE on separate servers behind a load balancer):
+To demonstrate distributed delopyment (FE/BE on separate servers behind a load balancer):
 
 1. Provision a second Linux server.
 2. Install JDK 21 + the jar on the second server.
