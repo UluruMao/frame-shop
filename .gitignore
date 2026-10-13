@@ -65,3 +65,7 @@ key.txt
 *_portfolio.txt
 # Local-only DB seeding / ad-hoc SQL scratch files
 seed-*.sql
+
+# Real deployment credentials — the checked-in file is a local-only template
+# (see frame-backend@.service.example); the live copy holds real credentials.
+deploy/frame-backend@.service
